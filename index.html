@@ -471,69 +471,44 @@
                     ◆ STRATÉGIE NET DIRECTION
                     <span id="ndStratDot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);transition:all 0.3s;"></span>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-                    <div>
-                        <label style="margin-top:0;">Seuil + (Rise)</label>
-                        <select id="nd_thresh_pos" style="width:100%;">
-                            <option value="1">+ 1</option><option value="2">+ 2</option><option value="3">+ 3</option>
-                            <option value="4">+ 4</option><option value="5">+ 5</option><option value="6">+ 6</option>
-                            <option value="7" selected>+ 7</option><option value="8">+ 8</option><option value="9">+ 9</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="margin-top:0;">Seuil − (Fall)</label>
-                        <select id="nd_thresh_neg" style="width:100%;">
-                            <option value="1">− 1</option><option value="2">− 2</option><option value="3">− 3</option>
-                            <option value="4">− 4</option><option value="5">− 5</option><option value="6">− 6</option>
-                            <option value="7" selected>− 7</option><option value="8">− 8</option><option value="9">− 9</option>
-                        </select>
-                    </div>
+
+                <!-- NOUVEAU : un seul menu déroulant combiné -->
+                <div style="margin-bottom:10px;">
+                    <label style="margin-top:0;">Seuil &amp; Direction</label>
+                    <select id="nd_threshold" style="width:100%;">
+                        <optgroup label="▲ RISE — seuil positif">
+                            <option value="+1">+ 1 → ▲ Rise</option>
+                            <option value="+2">+ 2 → ▲ Rise</option>
+                            <option value="+3">+ 3 → ▲ Rise</option>
+                            <option value="+4">+ 4 → ▲ Rise</option>
+                            <option value="+5">+ 5 → ▲ Rise</option>
+                            <option value="+6">+ 6 → ▲ Rise</option>
+                            <option value="+7" selected>+ 7 → ▲ Rise</option>
+                            <option value="+8">+ 8 → ▲ Rise</option>
+                            <option value="+9">+ 9 → ▲ Rise</option>
+                        </optgroup>
+                        <optgroup label="▼ FALL — seuil négatif">
+                            <option value="-1">− 1 → ▼ Fall</option>
+                            <option value="-2">− 2 → ▼ Fall</option>
+                            <option value="-3">− 3 → ▼ Fall</option>
+                            <option value="-4">− 4 → ▼ Fall</option>
+                            <option value="-5">− 5 → ▼ Fall</option>
+                            <option value="-6">− 6 → ▼ Fall</option>
+                            <option value="-7">− 7 → ▼ Fall</option>
+                            <option value="-8">− 8 → ▼ Fall</option>
+                            <option value="-9">− 9 → ▼ Fall</option>
+                        </optgroup>
+                    </select>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-                    <div>
-                        <label style="margin-top:0;">Direction tradée</label>
-                        <select id="nd_mode" style="width:100%;">
-                            <option value="both">Rise + Fall</option>
-                            <option value="rise">Rise uniquement (+)</option>
-                            <option value="fall">Fall uniquement (−)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="margin-top:0;">Type de trade</label>
-                        <select id="nd_trade_type" style="width:100%;">
-                            <option value="single">Single</option>
-                            <option value="double">Double</option>
-                        </select>
-                    </div>
+
+                <div style="margin-bottom:10px;">
+                    <label style="margin-top:0;">Type de trade</label>
+                    <select id="nd_trade_type" style="width:100%;">
+                        <option value="single">Single</option>
+                        <option value="double">Double</option>
+                    </select>
                 </div>
-                <div style="background:#0d1a2a;border:1px solid #2a4060;border-radius:4px;padding:8px 10px;margin-bottom:10px;">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-                        <span style="font-size:1rem;">🔄</span>
-                        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#ff8040;letter-spacing:1px;">RETOURNEMENT</div>
-                        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--muted);">+ → FALL &nbsp;|&nbsp; − → RISE</div>
-                        <label style="display:flex;align-items:center;gap:5px;margin:0 0 0 auto;cursor:pointer;font-size:10px;letter-spacing:1px;color:var(--muted);font-family:'Share Tech Mono',monospace;">
-                            <input type="checkbox" id="nd_reversal" style="width:auto;margin:0;accent-color:#ff8040;" checked> ACTIF
-                        </label>
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                        <div>
-                            <label style="margin-top:0;font-size:9px;">Seuil retour + (→FALL)</label>
-                            <select id="nd_reversal_thresh_pos" style="width:100%;">
-                                <option value="1">+ 1</option><option value="2">+ 2</option><option value="3">+ 3</option>
-                                <option value="4">+ 4</option><option value="5">+ 5</option><option value="6">+ 6</option>
-                                <option value="7">+ 7</option><option value="8">+ 8</option><option value="9" selected>+ 9</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="margin-top:0;font-size:9px;">Seuil retour − (→RISE)</label>
-                            <select id="nd_reversal_thresh_neg" style="width:100%;">
-                                <option value="1">− 1</option><option value="2">− 2</option><option value="3">− 3</option>
-                                <option value="4">− 4</option><option value="5">− 5</option><option value="6">− 6</option>
-                                <option value="7">− 7</option><option value="8">− 8</option><option value="9" selected>− 9</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
+
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
                     <div>
                         <label style="margin-top:0;">Cooldown (s)</label>
@@ -631,7 +606,7 @@ document.getElementById('btnAuthDeriv').addEventListener('click', async () => {
 });
 
 document.getElementById('btnLogout').addEventListener('click', () => {
-    currentSessionId++; // invalide tous les handlers actifs
+    currentSessionId++;
     if (ws) { try { ws.close(); } catch(e) {} }
     sessionStorage.clear();
     localStorage.clear();
@@ -639,7 +614,7 @@ document.getElementById('btnLogout').addEventListener('click', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INIT — gestion du retour OAuth + restauration session
+// INIT
 // ═══════════════════════════════════════════════════════════════════════════════
 async function initApp() {
     const params = new URLSearchParams(window.location.search);
@@ -695,7 +670,7 @@ function showLoggedOut() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// COMPTES — REST API Deriv
+// COMPTES
 // ═══════════════════════════════════════════════════════════════════════════════
 async function loadAccounts() {
     log("📋 Récupération des comptes Deriv...", "#0af");
@@ -724,13 +699,10 @@ async function loadAccounts() {
         });
 
         log(`✅ ${accounts.length} compte(s) chargé(s).`, "#00ff88");
-
-        // Auto-connecter le premier compte
         if (sel.value) switchAccount(sel.value);
 
     } catch(e) {
         log("✖ Erreur chargement comptes : " + e.message, "#ff3b3b");
-        // Token peut être expiré
         if (e.message.includes('401') || e.message.includes('403')) {
             localStorage.clear();
             showLoggedOut();
@@ -753,14 +725,14 @@ document.getElementById('accountSelect').addEventListener('change', e => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SESSION WEBSOCKET — OTP → WS URL → open
+// SESSION WEBSOCKET
 // ═══════════════════════════════════════════════════════════════════════════════
-let currentWsUrl    = null;
-let currentSessionId = 0; // incrémenté à chaque switchAccount — invalide les anciens handlers
+let currentWsUrl     = null;
+let currentSessionId = 0;
 
 async function switchAccount(accountId) {
     currentAccountId = accountId;
-    currentSessionId++;           // invalide tous les onclose/timers précédents
+    currentSessionId++;
     const mySession = currentSessionId;
 
     stopKeepalive();
@@ -770,36 +742,28 @@ async function switchAccount(accountId) {
 
     setConnStatus('connecting');
     log(`🔄 Demande OTP pour le compte ${accountId}...`, "#0af");
-
     await _fetchOtpAndConnect(accountId, mySession);
 }
 
 async function _fetchOtpAndConnect(accountId, sessionId) {
-    // Si une session plus récente a été demandée, on abandonne
     if (sessionId !== currentSessionId) return;
-
     try {
         const resp = await fetch(
             `https://api.derivws.com/trading/v1/options/accounts/${accountId}/otp`,
             { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Deriv-App-ID': CLIENT_ID } }
         );
-
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             throw new Error(err.error?.message || `HTTP ${resp.status}`);
         }
-
         const otpData = await resp.json();
         const wsUrl   = otpData.data?.url;
         if (!wsUrl) throw new Error("Pas d'URL WebSocket dans la réponse OTP");
-
-        if (sessionId !== currentSessionId) return; // session annulée pendant le fetch
-
+        if (sessionId !== currentSessionId) return;
         currentWsUrl = wsUrl;
         wsReconnectAttempt = 0;
         log("✅ OTP validé. Ouverture du canal sécurisé...", "#00ff88");
         openWS(wsUrl, sessionId);
-
     } catch(e) {
         if (sessionId !== currentSessionId) return;
         log("✖ Erreur OTP : " + e.message, "#ff3b3b");
@@ -835,7 +799,6 @@ function openWS(wsUrl, sessionId) {
         if (data.msg_type === 'ping') return;
         if (data.msg_type === 'tick') processTick(data.tick);
 
-        // Proposal → auto-buy
         if (data.msg_type === 'proposal' && data.proposal) {
             socket.send(JSON.stringify({ buy: data.proposal.id, price: data.proposal.ask_price }));
         }
@@ -877,21 +840,16 @@ function openWS(wsUrl, sessionId) {
     socket.onerror = () => {};
 
     socket.onclose = (e) => {
-        // Session obsolète → ignorer complètement
         if (sessionId !== currentSessionId) return;
-
         stopKeepalive();
         setConnStatus('disconnected');
         wsReconnectAttempt++;
-
-        // Après 3 tentatives sur la même URL → nouvel OTP (URL expirée)
         if (wsReconnectAttempt >= 3) {
             wsReconnectAttempt = 0;
             log("⚠ URL WS expirée — Demande d'un nouvel OTP...", "#ffc800");
             wsReconnectTimer = setTimeout(() => _fetchOtpAndConnect(currentAccountId, sessionId), 2000);
             return;
         }
-
         const delay = Math.min(2000 * wsReconnectAttempt, 8000);
         log(`⚠ WS fermé (code ${e.code}). Reconnexion dans ${Math.round(delay/1000)}s... (${wsReconnectAttempt}/3)`, "#ffc800");
         wsReconnectTimer = setTimeout(() => openWS(currentWsUrl, sessionId), delay);
@@ -899,10 +857,9 @@ function openWS(wsUrl, sessionId) {
 }
 
 function setConnStatus(state) {
-    const dot = document.getElementById('connDot');
-    const txt = document.getElementById('connStatus');
-    const sel = document.getElementById('accountSelect');
-    const info = document.getElementById('accountInfo');
+    const dot  = document.getElementById('connDot');
+    const txt  = document.getElementById('connStatus');
+    const sel  = document.getElementById('accountSelect');
     const states = {
         connected:    { dot: 'live', txt: 'Connecté — ' + (sel.options[sel.selectedIndex]?.text || ''), color: 'var(--accent)' },
         connecting:   { dot: '',     txt: 'Connexion en cours...', color: 'var(--warn)' },
@@ -1040,7 +997,7 @@ function processTick(tick) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EXÉCUTION DES TRADES — via Proposal → Buy
+// EXÉCUTION DES TRADES
 // ═══════════════════════════════════════════════════════════════════════════════
 function buildProposal(sym, stk, dur, unit, isRise, allowEq) {
     const contractType = isRise
@@ -1112,17 +1069,26 @@ function toggleNdStrat() {
     const btn = document.getElementById('btnNdStrat');
     const dot = document.getElementById('ndStratDot');
     if (ndStratOn) {
-        btn.textContent='Stratégie Net Dir — ON'; btn.style.background='linear-gradient(135deg,#0a3a1e,#0d5228)'; btn.style.color='var(--accent)'; btn.style.borderColor='#00ff8844';
-        dot.style.background='var(--accent)'; dot.style.boxShadow='0 0 6px var(--accent)'; dot.style.animation='pulse 1.5s infinite';
+        btn.textContent='Stratégie Net Dir — ON';
+        btn.style.background='linear-gradient(135deg,#0a3a1e,#0d5228)';
+        btn.style.color='var(--accent)';
+        btn.style.borderColor='#00ff8844';
+        dot.style.background='var(--accent)';
+        dot.style.boxShadow='0 0 6px var(--accent)';
+        dot.style.animation='pulse 1.5s infinite';
         ndLastTradeTime = 0;
-        const tPos = document.getElementById('nd_thresh_pos').value;
-        const tNeg = document.getElementById('nd_thresh_neg').value;
-        const mode = document.getElementById('nd_mode').value;
-        const modeLabel = mode==='both'?'Rise+Fall':mode==='rise'?'Rise seul':'Fall seul';
-        log(`🎯 Net Dir ON — Seuil +${tPos} / −${tNeg} | ${modeLabel}`, "#00ff88");
+        const raw = document.getElementById('nd_threshold').value;
+        const val = parseInt(raw);
+        const dirLabel = val > 0 ? `+${val} → ▲ Rise` : `${val} → ▼ Fall`;
+        log(`🎯 Net Dir ON — Seuil ${dirLabel}`, "#00ff88");
     } else {
-        btn.textContent='Stratégie Net Dir — OFF'; btn.style.background='linear-gradient(135deg,#1a2a50,#1e3578)'; btn.style.color='#79c0ff'; btn.style.borderColor='#2d5aa044';
-        dot.style.background='var(--muted)'; dot.style.boxShadow=''; dot.style.animation='';
+        btn.textContent='Stratégie Net Dir — OFF';
+        btn.style.background='linear-gradient(135deg,#1a2a50,#1e3578)';
+        btn.style.color='#79c0ff';
+        btn.style.borderColor='#2d5aa044';
+        dot.style.background='var(--muted)';
+        dot.style.boxShadow='';
+        dot.style.animation='';
         log("⏹ Net Dir OFF.", "#4a5a6a");
     }
 }
@@ -1130,53 +1096,35 @@ function toggleNdStrat() {
 function checkNdStrat(dir) {
     if (!ndStratOn || !ws || ws.readyState !== WebSocket.OPEN) return;
 
-    const threshPos    = parseInt(document.getElementById('nd_thresh_pos').value) || 7;
-    const threshNeg    = parseInt(document.getElementById('nd_thresh_neg').value) || 7;
-    const revThreshPos = parseInt(document.getElementById('nd_reversal_thresh_pos').value) || 9;
-    const revThreshNeg = parseInt(document.getElementById('nd_reversal_thresh_neg').value) || 9;
-    const mode         = document.getElementById('nd_mode').value;
-    const tradeType    = document.getElementById('nd_trade_type').value;
-    const cooldown     = (parseInt(document.getElementById('nd_cooldown').value) || 15) * 1000;
-    const reversalOn   = document.getElementById('nd_reversal').checked;
-    const now          = performance.now();
+    const raw       = document.getElementById('nd_threshold').value; // "+7" ou "-5"
+    const val       = parseInt(raw);
+    const isRiseDir = val > 0;
+    const thresh    = Math.abs(val);
+    const tradeType = document.getElementById('nd_trade_type').value;
+    const cooldown  = (parseInt(document.getElementById('nd_cooldown').value) || 15) * 1000;
+    const now       = performance.now();
 
     if (now - ndLastTradeTime < cooldown) return;
 
-    // ── Retournement (prioritaire) ─────────────────────────────────────────────
-    if (reversalOn) {
-        if (dir >= revThreshPos) {
-            ndLastTradeTime = now;
-            fireSingleTrade('fall');
-            log(`🔄 +${dir} ≥ +${revThreshPos} → RETOURNEMENT ▼ FALL`, "#ff8040");
-            return;
-        }
-        if (dir <= -revThreshNeg) {
-            ndLastTradeTime = now;
+    // Déclenche UNIQUEMENT si la direction correspond au seuil choisi
+    if (isRiseDir && dir >= thresh) {
+        ndLastTradeTime = now;
+        if (tradeType === 'double') {
+            fireDoubleTrade();
+            log(`🎯 Net Dir +${dir} ≥ +${thresh} → Double Trade`, "#ffc800");
+        } else {
             fireSingleTrade('rise');
-            log(`🔄 ${dir} ≤ −${revThreshNeg} → RETOURNEMENT ▲ RISE`, "#ff8040");
-            return;
+            log(`🎯 +${dir} ≥ +${thresh} → ▲ RISE`, "#00ff88");
         }
-    }
-
-    // ── Signal normal ──────────────────────────────────────────────────────────
-    const tR = dir >= threshPos  && (mode === 'both' || mode === 'rise');
-    const tF = dir <= -threshNeg && (mode === 'both' || mode === 'fall');
-    if (!tR && !tF) return;
-
-    // Éviter de déclencher si déjà dans la zone retournement
-    if (reversalOn && tR && threshPos >= revThreshPos) return;
-    if (reversalOn && tF && threshNeg >= revThreshNeg) return;
-
-    ndLastTradeTime = now;
-    if (tradeType === 'double') {
-        fireDoubleTrade();
-        log(`🎯 Net Dir ${dir>0?'+':''}${dir} → Double Trade`, "#ffc800");
-    } else if (tR) {
-        fireSingleTrade('rise');
-        log(`🎯 +${dir} ≥ +${threshPos} → ▲ RISE`, "#00ff88");
-    } else {
-        fireSingleTrade('fall');
-        log(`🎯 ${dir} ≤ −${threshNeg} → ▼ FALL`, "#ff6060");
+    } else if (!isRiseDir && dir <= -thresh) {
+        ndLastTradeTime = now;
+        if (tradeType === 'double') {
+            fireDoubleTrade();
+            log(`🎯 Net Dir ${dir} ≤ −${thresh} → Double Trade`, "#ffc800");
+        } else {
+            fireSingleTrade('fall');
+            log(`🎯 ${dir} ≤ −${thresh} → ▼ FALL`, "#ff6060");
+        }
     }
 }
 
@@ -1544,7 +1492,7 @@ function drawAnaCanvas(distData) {
 // PERSISTANCE SETTINGS
 // ═══════════════════════════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
-    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1'].forEach(id => {
+    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1','nd_threshold','nd_trade_type','nd_cooldown'].forEach(id => {
         const v=localStorage.getItem('sniper_'+id), el=document.getElementById(id);
         if(v&&el) el.value=v;
     });
@@ -1554,7 +1502,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const st=localStorage.getItem('sniper_trades');
     if(st){try{JSON.parse(st).forEach(t=>addTradeRow(t,false));rebuildCounters();}catch(e){}}
 
-    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1'].forEach(id=>{
+    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1','nd_threshold','nd_trade_type','nd_cooldown'].forEach(id=>{
         const el=document.getElementById(id); if(!el) return;
         el.addEventListener('input',  ()=>localStorage.setItem('sniper_'+id,el.value));
         el.addEventListener('change', ()=>localStorage.setItem('sniper_'+id,el.value));
