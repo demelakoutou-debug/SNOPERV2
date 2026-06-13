@@ -473,19 +473,36 @@
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
                     <div>
-                        <label style="margin-top:0;">Seuil normal</label>
-                        <select id="nd_threshold" style="width:100%;">
-                            <option value="1">± 1</option><option value="2">± 2</option><option value="3">± 3</option>
-                            <option value="4">± 4</option><option value="5">± 5</option><option value="6">± 6</option>
-                            <option value="7" selected>± 7</option><option value="8">± 8</option><option value="9">± 9</option>
+                        <label style="margin-top:0;">Seuil + (Rise)</label>
+                        <select id="nd_thresh_pos" style="width:100%;">
+                            <option value="1">+ 1</option><option value="2">+ 2</option><option value="3">+ 3</option>
+                            <option value="4">+ 4</option><option value="5">+ 5</option><option value="6">+ 6</option>
+                            <option value="7" selected>+ 7</option><option value="8">+ 8</option><option value="9">+ 9</option>
                         </select>
                     </div>
+                    <div>
+                        <label style="margin-top:0;">Seuil − (Fall)</label>
+                        <select id="nd_thresh_neg" style="width:100%;">
+                            <option value="1">− 1</option><option value="2">− 2</option><option value="3">− 3</option>
+                            <option value="4">− 4</option><option value="5">− 5</option><option value="6">− 6</option>
+                            <option value="7" selected>− 7</option><option value="8">− 8</option><option value="9">− 9</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
                     <div>
                         <label style="margin-top:0;">Direction tradée</label>
                         <select id="nd_mode" style="width:100%;">
                             <option value="both">Rise + Fall</option>
                             <option value="rise">Rise uniquement (+)</option>
                             <option value="fall">Fall uniquement (−)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="margin-top:0;">Type de trade</label>
+                        <select id="nd_trade_type" style="width:100%;">
+                            <option value="single">Single</option>
+                            <option value="double">Double</option>
                         </select>
                     </div>
                 </div>
@@ -498,23 +515,26 @@
                             <input type="checkbox" id="nd_reversal" style="width:auto;margin:0;accent-color:#ff8040;" checked> ACTIF
                         </label>
                     </div>
-                    <div>
-                        <label style="margin-top:0;font-size:9px;">Seuil retournement</label>
-                        <select id="nd_reversal_thresh" style="width:100%;">
-                            <option value="1">± 1</option><option value="2">± 2</option><option value="3">± 3</option>
-                            <option value="4">± 4</option><option value="5">± 5</option><option value="6">± 6</option>
-                            <option value="7">± 7</option><option value="8">± 8</option><option value="9" selected>± 9</option>
-                        </select>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div>
+                            <label style="margin-top:0;font-size:9px;">Seuil retour + (→FALL)</label>
+                            <select id="nd_reversal_thresh_pos" style="width:100%;">
+                                <option value="1">+ 1</option><option value="2">+ 2</option><option value="3">+ 3</option>
+                                <option value="4">+ 4</option><option value="5">+ 5</option><option value="6">+ 6</option>
+                                <option value="7">+ 7</option><option value="8">+ 8</option><option value="9" selected>+ 9</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="margin-top:0;font-size:9px;">Seuil retour − (→RISE)</label>
+                            <select id="nd_reversal_thresh_neg" style="width:100%;">
+                                <option value="1">− 1</option><option value="2">− 2</option><option value="3">− 3</option>
+                                <option value="4">− 4</option><option value="5">− 5</option><option value="6">− 6</option>
+                                <option value="7">− 7</option><option value="8">− 8</option><option value="9" selected>− 9</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-                    <div>
-                        <label style="margin-top:0;">Type de trade</label>
-                        <select id="nd_trade_type" style="width:100%;">
-                            <option value="single">Single (Rise ou Fall)</option>
-                            <option value="double">Double (Rise + Fall)</option>
-                        </select>
-                    </div>
                     <div>
                         <label style="margin-top:0;">Cooldown (s)</label>
                         <input type="number" id="nd_cooldown" value="15" min="5" max="120" style="width:100%;">
@@ -1094,8 +1114,12 @@ function toggleNdStrat() {
     if (ndStratOn) {
         btn.textContent='Stratégie Net Dir — ON'; btn.style.background='linear-gradient(135deg,#0a3a1e,#0d5228)'; btn.style.color='var(--accent)'; btn.style.borderColor='#00ff8844';
         dot.style.background='var(--accent)'; dot.style.boxShadow='0 0 6px var(--accent)'; dot.style.animation='pulse 1.5s infinite';
-        ndLastTradeTime=0;
-        log(`🎯 Net Dir ON — ±${document.getElementById('nd_threshold').value}`, "#00ff88");
+        ndLastTradeTime = 0;
+        const tPos = document.getElementById('nd_thresh_pos').value;
+        const tNeg = document.getElementById('nd_thresh_neg').value;
+        const mode = document.getElementById('nd_mode').value;
+        const modeLabel = mode==='both'?'Rise+Fall':mode==='rise'?'Rise seul':'Fall seul';
+        log(`🎯 Net Dir ON — Seuil +${tPos} / −${tNeg} | ${modeLabel}`, "#00ff88");
     } else {
         btn.textContent='Stratégie Net Dir — OFF'; btn.style.background='linear-gradient(135deg,#1a2a50,#1e3578)'; btn.style.color='#79c0ff'; btn.style.borderColor='#2d5aa044';
         dot.style.background='var(--muted)'; dot.style.boxShadow=''; dot.style.animation='';
@@ -1105,31 +1129,55 @@ function toggleNdStrat() {
 
 function checkNdStrat(dir) {
     if (!ndStratOn || !ws || ws.readyState !== WebSocket.OPEN) return;
-    const thresh     = parseInt(document.getElementById('nd_threshold').value) || 7;
-    const revThresh  = parseInt(document.getElementById('nd_reversal_thresh').value) || 9;
-    const mode       = document.getElementById('nd_mode').value;
-    const tradeType  = document.getElementById('nd_trade_type').value;
-    const cooldown   = (parseInt(document.getElementById('nd_cooldown').value)||15) * 1000;
-    const reversalOn = document.getElementById('nd_reversal').checked;
-    const now        = performance.now();
-    const absDir     = Math.abs(dir);
+
+    const threshPos    = parseInt(document.getElementById('nd_thresh_pos').value) || 7;
+    const threshNeg    = parseInt(document.getElementById('nd_thresh_neg').value) || 7;
+    const revThreshPos = parseInt(document.getElementById('nd_reversal_thresh_pos').value) || 9;
+    const revThreshNeg = parseInt(document.getElementById('nd_reversal_thresh_neg').value) || 9;
+    const mode         = document.getElementById('nd_mode').value;
+    const tradeType    = document.getElementById('nd_trade_type').value;
+    const cooldown     = (parseInt(document.getElementById('nd_cooldown').value) || 15) * 1000;
+    const reversalOn   = document.getElementById('nd_reversal').checked;
+    const now          = performance.now();
+
     if (now - ndLastTradeTime < cooldown) return;
 
-    if (reversalOn && absDir >= revThresh) {
-        ndLastTradeTime = now;
-        if (dir > 0) { fireSingleTrade('fall'); log(`🔄 +${dir} ≥ +${revThresh} → RETOURNEMENT ▼ FALL`, "#ff8040"); }
-        else         { fireSingleTrade('rise'); log(`🔄 ${dir} ≤ -${revThresh} → RETOURNEMENT ▲ RISE`, "#ff8040"); }
-        return;
+    // ── Retournement (prioritaire) ─────────────────────────────────────────────
+    if (reversalOn) {
+        if (dir >= revThreshPos) {
+            ndLastTradeTime = now;
+            fireSingleTrade('fall');
+            log(`🔄 +${dir} ≥ +${revThreshPos} → RETOURNEMENT ▼ FALL`, "#ff8040");
+            return;
+        }
+        if (dir <= -revThreshNeg) {
+            ndLastTradeTime = now;
+            fireSingleTrade('rise');
+            log(`🔄 ${dir} ≤ −${revThreshNeg} → RETOURNEMENT ▲ RISE`, "#ff8040");
+            return;
+        }
     }
-    if (absDir < thresh) return;
-    if (reversalOn && thresh >= revThresh) return;
-    const tR = dir >= thresh  && (mode==='both'||mode==='rise');
-    const tF = dir <= -thresh && (mode==='both'||mode==='fall');
+
+    // ── Signal normal ──────────────────────────────────────────────────────────
+    const tR = dir >= threshPos  && (mode === 'both' || mode === 'rise');
+    const tF = dir <= -threshNeg && (mode === 'both' || mode === 'fall');
     if (!tR && !tF) return;
+
+    // Éviter de déclencher si déjà dans la zone retournement
+    if (reversalOn && tR && threshPos >= revThreshPos) return;
+    if (reversalOn && tF && threshNeg >= revThreshNeg) return;
+
     ndLastTradeTime = now;
-    if (tradeType === 'double') { fireDoubleTrade(); log(`🎯 Net Dir ${dir>0?'+':''}${dir} → Double Trade`, "#ffc800"); }
-    else if (tR) { fireSingleTrade('rise'); log(`🎯 +${dir} ≥ +${thresh} → ▲ RISE`, "#00ff88"); }
-    else         { fireSingleTrade('fall'); log(`🎯 ${dir} ≤ -${thresh} → ▼ FALL`, "#ff6060"); }
+    if (tradeType === 'double') {
+        fireDoubleTrade();
+        log(`🎯 Net Dir ${dir>0?'+':''}${dir} → Double Trade`, "#ffc800");
+    } else if (tR) {
+        fireSingleTrade('rise');
+        log(`🎯 +${dir} ≥ +${threshPos} → ▲ RISE`, "#00ff88");
+    } else {
+        fireSingleTrade('fall');
+        log(`🎯 ${dir} ≤ −${threshNeg} → ▼ FALL`, "#ff6060");
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
