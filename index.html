@@ -611,8 +611,6 @@ document.getElementById('btnAuthDeriv').addEventListener('click', async () => {
 });
 
 document.getElementById('btnLogout').addEventListener('click', () => {
-    wsIntentionalClose = true;
-    if (ws) { try { ws.close(); } catch(e) {} }
     sessionStorage.clear();
     localStorage.clear();
     window.location.href = REDIRECT_URI;
@@ -729,68 +727,50 @@ async function createDemoAccount() {
 }
 
 document.getElementById('accountSelect').addEventListener('change', e => {
-    if (e.target.value) {
-        wsIntentionalClose = true; // fermeture volontaire avant changement de compte
-        switchAccount(e.target.value);
-    }
+    if (e.target.value) switchAccount(e.target.value);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SESSION WEBSOCKET — OTP → WS URL → open
 // ═══════════════════════════════════════════════════════════════════════════════
-let currentWsUrl        = null;  // URL WS courante (stockée pour reconnexion)
-let wsIntentionalClose  = false; // fermeture volontaire → pas de reconnexion
-
 async function switchAccount(accountId) {
     currentAccountId = accountId;
 
-    // Fermeture propre du WS précédent
-    wsIntentionalClose = true;
+    // Fermer WS précédent
     stopKeepalive();
     clearTimeout(wsReconnectTimer);
     if (ws) { try { ws.close(); } catch(e) {} ws = null; }
-    wsIntentionalClose = false;
-    wsReconnectAttempt = 0;
 
     setConnStatus('connecting');
     log(`🔄 Demande OTP pour le compte ${accountId}...`, "#0af");
 
-    await _fetchOtpAndConnect(accountId);
-}
-
-async function _fetchOtpAndConnect(accountId) {
     try {
         const resp = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${accountId}/otp`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${accessToken}`, 'Deriv-App-ID': CLIENT_ID }
         });
-
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             throw new Error(err.error?.message || `HTTP ${resp.status}`);
         }
-
         const otpData = await resp.json();
         const wsUrl   = otpData.data?.url;
         if (!wsUrl) throw new Error("Pas d'URL WebSocket dans la réponse OTP");
 
-        currentWsUrl = wsUrl;
-        wsReconnectAttempt = 0;
         log("✅ OTP validé. Ouverture du canal sécurisé...", "#00ff88");
         openWS(wsUrl);
 
     } catch(e) {
         log("✖ Erreur OTP : " + e.message, "#ff3b3b");
         setConnStatus('error');
-        if (e.message.includes('401') || e.message.includes('403')) {
-            localStorage.clear(); showLoggedOut();
-        }
+        // Si 401, token expiré
+        if (e.message.includes('401')) { localStorage.clear(); showLoggedOut(); }
     }
 }
 
 function openWS(wsUrl) {
-    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
     ws = new WebSocket(wsUrl);
+    wsReconnectAttempt++;
 
     ws.onopen = () => {
         wsReconnectAttempt = 0;
@@ -850,31 +830,15 @@ function openWS(wsUrl) {
         }
     };
 
-    ws.onerror = () => {
-        // onclose sera appelé juste après — on laisse la logique là
-    };
+    ws.onerror = () => {};
 
-    ws.onclose = (e) => {
+    ws.onclose = () => {
         stopKeepalive();
-
-        // Fermeture volontaire (changement de compte, déconnexion) → ne pas reconnecter
-        if (wsIntentionalClose) return;
-
         setConnStatus('disconnected');
-        wsReconnectAttempt++;
-
-        // Après 3 échecs de reconnexion WS → re-demander un nouvel OTP
-        // (l'URL WS des comptes ROT expire rapidement)
-        if (wsReconnectAttempt >= 3) {
-            wsReconnectAttempt = 0;
-            log(`⚠ URL WS expirée (${wsReconnectAttempt} échecs) — Demande d'un nouvel OTP...`, "#ffc800");
-            wsReconnectTimer = setTimeout(() => _fetchOtpAndConnect(currentAccountId), 2000);
-            return;
-        }
-
-        const delay = Math.min(2000 * wsReconnectAttempt, 10000);
-        log(`⚠ WS fermé (code ${e.code}). Reconnexion dans ${Math.round(delay/1000)}s... (${wsReconnectAttempt}/3)`, "#ffc800");
-        wsReconnectTimer = setTimeout(() => openWS(currentWsUrl), delay);
+        if (wsReconnectAttempt >= 5) { log("⚠ Trop d'échecs — re-demande d'OTP...", "#ffc800"); switchAccount(currentAccountId); return; }
+        const delay = Math.min(3000 * (wsReconnectAttempt || 1), 30000);
+        log(`⚠ WS fermé. Reconnexion dans ${Math.round(delay/1000)}s...`, "#ffc800");
+        wsReconnectTimer = setTimeout(() => openWS(wsUrl), delay);
     };
 }
 
