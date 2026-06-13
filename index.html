@@ -611,6 +611,8 @@ document.getElementById('btnAuthDeriv').addEventListener('click', async () => {
 });
 
 document.getElementById('btnLogout').addEventListener('click', () => {
+    currentSessionId++; // invalide tous les handlers actifs
+    if (ws) { try { ws.close(); } catch(e) {} }
     sessionStorage.clear();
     localStorage.clear();
     window.location.href = REDIRECT_URI;
@@ -733,46 +735,70 @@ document.getElementById('accountSelect').addEventListener('change', e => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SESSION WEBSOCKET — OTP → WS URL → open
 // ═══════════════════════════════════════════════════════════════════════════════
+let currentWsUrl    = null;
+let currentSessionId = 0; // incrémenté à chaque switchAccount — invalide les anciens handlers
+
 async function switchAccount(accountId) {
     currentAccountId = accountId;
+    currentSessionId++;           // invalide tous les onclose/timers précédents
+    const mySession = currentSessionId;
 
-    // Fermer WS précédent
     stopKeepalive();
     clearTimeout(wsReconnectTimer);
     if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+    wsReconnectAttempt = 0;
 
     setConnStatus('connecting');
     log(`🔄 Demande OTP pour le compte ${accountId}...`, "#0af");
 
+    await _fetchOtpAndConnect(accountId, mySession);
+}
+
+async function _fetchOtpAndConnect(accountId, sessionId) {
+    // Si une session plus récente a été demandée, on abandonne
+    if (sessionId !== currentSessionId) return;
+
     try {
-        const resp = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${accountId}/otp`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'Deriv-App-ID': CLIENT_ID }
-        });
+        const resp = await fetch(
+            `https://api.derivws.com/trading/v1/options/accounts/${accountId}/otp`,
+            { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Deriv-App-ID': CLIENT_ID } }
+        );
+
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             throw new Error(err.error?.message || `HTTP ${resp.status}`);
         }
+
         const otpData = await resp.json();
         const wsUrl   = otpData.data?.url;
         if (!wsUrl) throw new Error("Pas d'URL WebSocket dans la réponse OTP");
 
+        if (sessionId !== currentSessionId) return; // session annulée pendant le fetch
+
+        currentWsUrl = wsUrl;
+        wsReconnectAttempt = 0;
         log("✅ OTP validé. Ouverture du canal sécurisé...", "#00ff88");
-        openWS(wsUrl);
+        openWS(wsUrl, sessionId);
 
     } catch(e) {
+        if (sessionId !== currentSessionId) return;
         log("✖ Erreur OTP : " + e.message, "#ff3b3b");
         setConnStatus('error');
-        // Si 401, token expiré
-        if (e.message.includes('401')) { localStorage.clear(); showLoggedOut(); }
+        if (e.message.includes('401') || e.message.includes('403')) {
+            localStorage.clear(); showLoggedOut();
+        }
     }
 }
 
-function openWS(wsUrl) {
-    ws = new WebSocket(wsUrl);
-    wsReconnectAttempt++;
+function openWS(wsUrl, sessionId) {
+    if (sessionId !== currentSessionId) return;
+    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
 
-    ws.onopen = () => {
+    const socket = new WebSocket(wsUrl);
+    ws = socket;
+
+    socket.onopen = () => {
+        if (sessionId !== currentSessionId) { socket.close(); return; }
         wsReconnectAttempt = 0;
         setConnStatus('connected');
         log("🔌 WebSocket sécurisé connecté !", "#00ff88");
@@ -781,23 +807,21 @@ function openWS(wsUrl) {
         startKeepalive();
     };
 
-    ws.onmessage = (msg) => {
+    socket.onmessage = (msg) => {
+        if (sessionId !== currentSessionId) return;
         let data;
         try { data = JSON.parse(msg.data); } catch(e) { return; }
 
         if (data.msg_type === 'ping') return;
-
         if (data.msg_type === 'tick') processTick(data.tick);
 
         // Proposal → auto-buy
         if (data.msg_type === 'proposal' && data.proposal) {
-            ws.send(JSON.stringify({ buy: data.proposal.id, price: data.proposal.ask_price }));
+            socket.send(JSON.stringify({ buy: data.proposal.id, price: data.proposal.ask_price }));
         }
 
         if (data.msg_type === 'buy') {
-            if (data.error) {
-                log("⚠ Erreur trade : " + data.error.message, "#ff3b3b"); return;
-            }
+            if (data.error) { log("⚠ Erreur trade : " + data.error.message, "#ff3b3b"); return; }
             if (data.buy) {
                 const cid   = data.buy.contract_id;
                 const type  = data.echo_req?.contract_type || '?';
@@ -805,7 +829,7 @@ function openWS(wsUrl) {
                 const stake = parseFloat(data.buy.buy_price || data.echo_req?.amount || 0);
                 pendingContracts[cid] = { stake, type, symbol: sym };
                 addTradeRow({ time: new Date().toLocaleTimeString('fr',{hour12:false}), symbol: sym, type, stake, contractId: cid, result: 'PENDING', pnl: null }, true);
-                ws.send(JSON.stringify({ proposal_open_contract: 1, contract_id: cid, subscribe: 1 }));
+                socket.send(JSON.stringify({ proposal_open_contract: 1, contract_id: cid, subscribe: 1 }));
                 log(`📋 Contrat #${cid} — ${type} $${stake.toFixed(2)}`, "#79c0ff");
             }
         }
@@ -830,15 +854,27 @@ function openWS(wsUrl) {
         }
     };
 
-    ws.onerror = () => {};
+    socket.onerror = () => {};
 
-    ws.onclose = () => {
+    socket.onclose = (e) => {
+        // Session obsolète → ignorer complètement
+        if (sessionId !== currentSessionId) return;
+
         stopKeepalive();
         setConnStatus('disconnected');
-        if (wsReconnectAttempt >= 5) { log("⚠ Trop d'échecs — re-demande d'OTP...", "#ffc800"); switchAccount(currentAccountId); return; }
-        const delay = Math.min(3000 * (wsReconnectAttempt || 1), 30000);
-        log(`⚠ WS fermé. Reconnexion dans ${Math.round(delay/1000)}s...`, "#ffc800");
-        wsReconnectTimer = setTimeout(() => openWS(wsUrl), delay);
+        wsReconnectAttempt++;
+
+        // Après 3 tentatives sur la même URL → nouvel OTP (URL expirée)
+        if (wsReconnectAttempt >= 3) {
+            wsReconnectAttempt = 0;
+            log("⚠ URL WS expirée — Demande d'un nouvel OTP...", "#ffc800");
+            wsReconnectTimer = setTimeout(() => _fetchOtpAndConnect(currentAccountId, sessionId), 2000);
+            return;
+        }
+
+        const delay = Math.min(2000 * wsReconnectAttempt, 8000);
+        log(`⚠ WS fermé (code ${e.code}). Reconnexion dans ${Math.round(delay/1000)}s... (${wsReconnectAttempt}/3)`, "#ffc800");
+        wsReconnectTimer = setTimeout(() => openWS(currentWsUrl, sessionId), delay);
     };
 }
 
