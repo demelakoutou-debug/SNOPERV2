@@ -515,6 +515,41 @@
                         <input type="number" id="nd_cooldown" value="15" min="5" max="120" style="width:100%;">
                     </div>
                 </div>
+
+                <!-- Martingale -->
+                <div style="background:#1a1206;border:1px solid #5a3a10;border-radius:4px;padding:8px 10px;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                        <span style="font-size:1rem;">♟️</span>
+                        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#ffaa40;letter-spacing:1px;">MARTINGALE</div>
+                        <label style="display:flex;align-items:center;gap:5px;margin:0 0 0 auto;cursor:pointer;font-size:10px;letter-spacing:1px;color:var(--muted);font-family:'Share Tech Mono',monospace;">
+                            <input type="checkbox" id="nd_martingale_on" style="width:auto;margin:0;accent-color:#ffaa40;"> ACTIF
+                        </label>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div>
+                            <label style="margin-top:0;font-size:9px;">Multiplicateur</label>
+                            <input type="number" id="nd_mart_mult" value="2" min="1.1" max="10" step="0.1" style="width:100%;">
+                        </div>
+                        <div>
+                            <label style="margin-top:0;font-size:9px;">Mise max ($)</label>
+                            <input type="number" id="nd_mart_max_stake" value="500" min="1" step="1" style="width:100%;">
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:9px;">
+                        <div style="background:#0d1a0d;border:1px solid #1a3a1a;border-radius:3px;padding:5px 8px;text-align:center;">
+                            <span style="color:#3fb950;">▲ RISE</span>
+                            <span style="color:var(--muted);"> Palier </span><span id="nd_mart_level_rise" style="color:#e0eaf5;">0</span>
+                            <span style="color:var(--muted);"> | Mise </span><span id="nd_mart_stake_rise" style="color:#e0eaf5;">—</span>
+                        </div>
+                        <div style="background:#1a0d0d;border:1px solid #3a1a1a;border-radius:3px;padding:5px 8px;text-align:center;">
+                            <span style="color:#ff6060;">▼ FALL</span>
+                            <span style="color:var(--muted);"> Palier </span><span id="nd_mart_level_fall" style="color:#e0eaf5;">0</span>
+                            <span style="color:var(--muted);"> | Mise </span><span id="nd_mart_stake_fall" style="color:#e0eaf5;">—</span>
+                        </div>
+                    </div>
+                    <button onclick="resetNdMartingale()" style="width:100%;margin-top:8px;padding:5px;background:transparent;border:1px solid #5a3a10;color:#ffaa40;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;border-radius:3px;cursor:pointer;text-transform:uppercase;">↺ Réinitialiser Martingale</button>
+                </div>
+
                 <button onclick="toggleNdStrat()" id="btnNdStrat"
                     style="width:100%;padding:9px;background:linear-gradient(135deg,#1a2a50,#1e3578);color:#79c0ff;border:1px solid #2d5aa044;border-radius:4px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all 0.2s;">
                     Stratégie Net Dir — OFF
@@ -563,6 +598,9 @@ let isAuto        = false;
 let lastTickTime  = 0;
 let ndStratOn     = false;
 let ndLastTradeTime = 0;
+let ndMartLevelRise = 0;
+let ndMartLevelFall = 0;
+let ndOpenContractSides = {}; // contract_id -> 'rise' | 'fall' (uniquement pour trades issus de Net Dir)
 
 let tradeCount    = 0;
 let wins          = 0;
@@ -804,16 +842,21 @@ function openWS(wsUrl, sessionId) {
         }
 
         if (data.msg_type === 'buy') {
-            if (data.error) { log("⚠ Erreur trade : " + data.error.message, "#ff3b3b"); return; }
+            if (data.error) {
+                log("⚠ Erreur trade : " + data.error.message, "#ff3b3b");
+                return;
+            }
             if (data.buy) {
                 const cid   = data.buy.contract_id;
                 const type  = data.echo_req?.contract_type || '?';
                 const sym   = data.echo_req?.underlying_symbol || document.getElementById('symbol').value;
                 const stake = parseFloat(data.buy.buy_price || data.echo_req?.amount || 0);
+                const ndSide = data.echo_req?.passthrough?.ndSide || null;
+                if (ndSide) ndOpenContractSides[cid] = ndSide;
                 pendingContracts[cid] = { stake, type, symbol: sym };
                 addTradeRow({ time: new Date().toLocaleTimeString('fr',{hour12:false}), symbol: sym, type, stake, contractId: cid, result: 'PENDING', pnl: null }, true);
                 socket.send(JSON.stringify({ proposal_open_contract: 1, contract_id: cid, subscribe: 1 }));
-                log(`📋 Contrat #${cid} — ${type} $${stake.toFixed(2)}`, "#79c0ff");
+                log(`📋 Contrat #${cid} — ${type} $${stake.toFixed(2)}${ndSide ? ' [Net Dir '+ndSide+']' : ''}`, "#79c0ff");
             }
         }
 
@@ -827,6 +870,13 @@ function openWS(wsUrl, sessionId) {
                 cumulativePnl += profit;
                 if (isWin) wins++; else losses++;
                 updateSummary();
+
+                const ndSide = ndOpenContractSides[c.contract_id];
+                if (ndSide) {
+                    applyMartingaleResult(ndSide, isWin);
+                    delete ndOpenContractSides[c.contract_id];
+                }
+
                 delete pendingContracts[c.contract_id];
                 log((isWin ? "💰 WIN" : "💸 LOSS") + ` #${c.contract_id} | P&L: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`, isWin ? "#00ff88" : "#ff3b3b");
             }
@@ -1031,17 +1081,19 @@ function fireDoubleTrade() {
     log(`🚀 ${symbolLabel(sym)} ▲${eq_r&&unit_r==='t'?'CALLE':'CALL'} $${stk_r}/${dur_r}${unit_r} | ▼${eq_f&&unit_f==='t'?'PUTE':'PUT'} $${stk_f}/${dur_f}${unit_f}`, "#0af");
 }
 
-function fireSingleTrade(direction) {
+function fireSingleTrade(direction, stakeOverride=null, ndSide=null) {
     if (!ws || ws.readyState !== WebSocket.OPEN) { log("⚠ Non connecté.", "#ff3b3b"); return; }
     const isRise = direction === 'rise';
     const sym    = document.getElementById('symbol').value;
-    const stk    = isRise ? document.getElementById('stake_rise1').value : document.getElementById('stake_fall1').value;
+    const stk    = stakeOverride != null ? stakeOverride : (isRise ? document.getElementById('stake_rise1').value : document.getElementById('stake_fall1').value);
     const dur    = isRise ? document.getElementById('dur_rise1').value   : document.getElementById('dur_fall1').value;
     const unit   = isRise ? document.getElementById('dunit_rise1').value : document.getElementById('dunit_fall1').value;
     const eq     = isRise ? isEq('eq_rise1') : isEq('eq_fall1');
-    ws.send(JSON.stringify(buildProposal(sym, stk, dur, unit, isRise, eq)));
+    const req    = buildProposal(sym, stk, dur, unit, isRise, eq);
+    if (ndSide) req.passthrough = { ndSide };
+    ws.send(JSON.stringify(req));
     const ctype = isRise ? (eq&&unit==='t'?'CALLE':'CALL') : (eq&&unit==='t'?'PUTE':'PUT');
-    log(`🎯 Single ${isRise?'▲':'▼'} ${ctype} ${symbolLabel(sym)} $${stk}/${dur}${unit}`, isRise?"#3fb950":"#ff6060");
+    log(`🎯 Single ${isRise?'▲':'▼'} ${ctype} ${symbolLabel(sym)} $${parseFloat(stk).toFixed(2)}/${dur}${unit}`, isRise?"#3fb950":"#ff6060");
     const btn = document.getElementById(isRise ? 'btnRise' : 'btnFall');
     if (btn) { btn.style.boxShadow = isRise?'0 0 16px #3fb95088':'0 0 16px #ff606088'; btn.style.filter='brightness(1.4)'; setTimeout(()=>{btn.style.boxShadow='';btn.style.filter='';},400); }
 }
@@ -1093,6 +1145,77 @@ function toggleNdStrat() {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARTINGALE — NET DIRECTION
+// ═══════════════════════════════════════════════════════════════════════════════
+function isNdMartingaleOn() {
+    return document.getElementById('nd_martingale_on')?.checked ?? false;
+}
+
+function getNdBaseStake(side) {
+    const id = side === 'rise' ? 'stake_rise1' : 'stake_fall1';
+    return parseFloat(document.getElementById(id).value) || 0;
+}
+
+function getNdMartMultiplier() {
+    return parseFloat(document.getElementById('nd_mart_mult').value) || 2;
+}
+
+function getNdMartMaxStake() {
+    return parseFloat(document.getElementById('nd_mart_max_stake').value) || Infinity;
+}
+
+// Calcule la mise à utiliser pour le prochain trade Net Dir sur un côté donné
+function getNdStake(side) {
+    const base = getNdBaseStake(side);
+    if (!isNdMartingaleOn()) return base;
+    const level = side === 'rise' ? ndMartLevelRise : ndMartLevelFall;
+    if (level <= 0) return base;
+    const mult = getNdMartMultiplier();
+    let stake = base * Math.pow(mult, level);
+    const maxStake = getNdMartMaxStake();
+    if (stake > maxStake) stake = maxStake;
+    return Math.round(stake * 100) / 100;
+}
+
+// Appelé au règlement d'un contrat Net Dir, ajuste le palier du côté concerné
+function applyMartingaleResult(side, isWin) {
+    if (!isNdMartingaleOn()) return;
+    if (isWin) {
+        const hadLevel = (side === 'rise' ? ndMartLevelRise : ndMartLevelFall) > 0;
+        if (side === 'rise') ndMartLevelRise = 0; else ndMartLevelFall = 0;
+        if (hadLevel) log(`♟️ Martingale ${side==='rise'?'▲ RISE':'▼ FALL'} — Gain, retour à la mise initiale.`, "#00ff88");
+    } else {
+        if (side === 'rise') ndMartLevelRise++; else ndMartLevelFall++;
+        const nextStake = getNdStake(side);
+        log(`♟️ Martingale ${side==='rise'?'▲ RISE':'▼ FALL'} — Perte, palier ${side==='rise'?ndMartLevelRise:ndMartLevelFall} → prochaine mise $${nextStake.toFixed(2)}`, "#ffaa40");
+    }
+    updateMartingaleDisplay();
+}
+
+function resetNdMartingale() {
+    ndMartLevelRise = 0;
+    ndMartLevelFall = 0;
+    updateMartingaleDisplay();
+    log("↺ Martingale Net Dir réinitialisée (Rise & Fall → palier 0).", "#4a5a6a");
+}
+
+function updateMartingaleDisplay() {
+    const lr = document.getElementById('nd_mart_level_rise');
+    const lf = document.getElementById('nd_mart_level_fall');
+    const sr = document.getElementById('nd_mart_stake_rise');
+    const sf = document.getElementById('nd_mart_stake_fall');
+    if (lr) lr.textContent = ndMartLevelRise;
+    if (lf) lf.textContent = ndMartLevelFall;
+    if (sr) sr.textContent = '$' + getNdStake('rise').toFixed(2);
+    if (sf) sf.textContent = '$' + getNdStake('fall').toFixed(2);
+}
+
+['nd_martingale_on','nd_mart_mult','nd_mart_max_stake','stake_rise1','stake_fall1'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateMartingaleDisplay);
+});
+
 function checkNdStrat(dir) {
     if (!ndStratOn || !ws || ws.readyState !== WebSocket.OPEN) return;
 
@@ -1110,20 +1233,26 @@ function checkNdStrat(dir) {
     if (isRiseDir && dir >= thresh) {
         ndLastTradeTime = now;
         if (tradeType === 'double') {
-            fireDoubleTrade();
-            log(`🎯 Net Dir +${dir} ≥ +${thresh} → Double Trade`, "#ffc800");
+            const stkR = getNdStake('rise'), stkF = getNdStake('fall');
+            fireSingleTrade('rise', stkR, 'rise');
+            fireSingleTrade('fall', stkF, 'fall');
+            log(`🎯 Net Dir +${dir} ≥ +${thresh} → Double Trade (▲$${stkR.toFixed(2)} / ▼$${stkF.toFixed(2)})`, "#ffc800");
         } else {
-            fireSingleTrade('rise');
-            log(`🎯 +${dir} ≥ +${thresh} → ▲ RISE`, "#00ff88");
+            const stkR = getNdStake('rise');
+            fireSingleTrade('rise', stkR, 'rise');
+            log(`🎯 +${dir} ≥ +${thresh} → ▲ RISE $${stkR.toFixed(2)}`, "#00ff88");
         }
     } else if (!isRiseDir && dir <= -thresh) {
         ndLastTradeTime = now;
         if (tradeType === 'double') {
-            fireDoubleTrade();
-            log(`🎯 Net Dir ${dir} ≤ −${thresh} → Double Trade`, "#ffc800");
+            const stkR = getNdStake('rise'), stkF = getNdStake('fall');
+            fireSingleTrade('rise', stkR, 'rise');
+            fireSingleTrade('fall', stkF, 'fall');
+            log(`🎯 Net Dir ${dir} ≤ −${thresh} → Double Trade (▲$${stkR.toFixed(2)} / ▼$${stkF.toFixed(2)})`, "#ffc800");
         } else {
-            fireSingleTrade('fall');
-            log(`🎯 ${dir} ≤ −${thresh} → ▼ FALL`, "#ff6060");
+            const stkF = getNdStake('fall');
+            fireSingleTrade('fall', stkF, 'fall');
+            log(`🎯 ${dir} ≤ −${thresh} → ▼ FALL $${stkF.toFixed(2)}`, "#ff6060");
         }
     }
 }
@@ -1492,22 +1621,29 @@ function drawAnaCanvas(distData) {
 // PERSISTANCE SETTINGS
 // ═══════════════════════════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
-    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1','nd_threshold','nd_trade_type','nd_cooldown'].forEach(id => {
+    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1','nd_threshold','nd_trade_type','nd_cooldown','nd_mart_mult','nd_mart_max_stake'].forEach(id => {
         const v=localStorage.getItem('sniper_'+id), el=document.getElementById(id);
         if(v&&el) el.value=v;
     });
+    if (localStorage.getItem('sniper_nd_martingale_on') === '1') {
+        const el = document.getElementById('nd_martingale_on');
+        if (el) el.checked = true;
+    }
     ['eq_rise1','eq_fall1'].forEach(id=>{
         if(localStorage.getItem('sniper_'+id)==='1'){const btn=document.getElementById(id);if(btn){btn.classList.add('eq-on');btn.textContent='✓ '+btn.textContent.replace('= ','');}}
     });
     const st=localStorage.getItem('sniper_trades');
     if(st){try{JSON.parse(st).forEach(t=>addTradeRow(t,false));rebuildCounters();}catch(e){}}
 
-    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1','nd_threshold','nd_trade_type','nd_cooldown'].forEach(id=>{
+    ['symbol','stake_rise1','dur_rise1','dunit_rise1','stake_fall1','dur_fall1','dunit_fall1','nd_threshold','nd_trade_type','nd_cooldown','nd_mart_mult','nd_mart_max_stake'].forEach(id=>{
         const el=document.getElementById(id); if(!el) return;
         el.addEventListener('input',  ()=>localStorage.setItem('sniper_'+id,el.value));
         el.addEventListener('change', ()=>localStorage.setItem('sniper_'+id,el.value));
     });
+    const martCb = document.getElementById('nd_martingale_on');
+    if (martCb) martCb.addEventListener('change', () => localStorage.setItem('sniper_nd_martingale_on', martCb.checked ? '1' : '0'));
 
+    updateMartingaleDisplay();
     initApp();
 });
 </script>
