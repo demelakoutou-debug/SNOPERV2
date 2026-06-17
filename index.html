@@ -838,7 +838,10 @@ function openWS(wsUrl, sessionId) {
         if (data.msg_type === 'tick') processTick(data.tick);
 
         if (data.msg_type === 'proposal' && data.proposal) {
-            socket.send(JSON.stringify({ buy: data.proposal.id, price: data.proposal.ask_price }));
+            const buyReq = { buy: data.proposal.id, price: data.proposal.ask_price };
+            const pt = data.echo_req?.passthrough;
+            if (pt) buyReq.passthrough = pt;
+            socket.send(JSON.stringify(buyReq));
         }
 
         if (data.msg_type === 'buy') {
@@ -851,8 +854,11 @@ function openWS(wsUrl, sessionId) {
                 const type  = data.echo_req?.contract_type || '?';
                 const sym   = data.echo_req?.underlying_symbol || document.getElementById('symbol').value;
                 const stake = parseFloat(data.buy.buy_price || data.echo_req?.amount || 0);
-                const ndSide = data.echo_req?.passthrough?.ndSide || null;
-                if (ndSide) ndOpenContractSides[cid] = ndSide;
+                const ndSide = data.echo_req?.passthrough?.ndSide || data.passthrough?.ndSide || null;
+                if (ndSide) {
+                    ndOpenContractSides[cid] = ndSide;
+                    log(`🏷️ Contrat #${cid} taggé Net Dir [${ndSide}]`, "#6a8aaa");
+                }
                 pendingContracts[cid] = { stake, type, symbol: sym };
                 addTradeRow({ time: new Date().toLocaleTimeString('fr',{hour12:false}), symbol: sym, type, stake, contractId: cid, result: 'PENDING', pnl: null }, true);
                 socket.send(JSON.stringify({ proposal_open_contract: 1, contract_id: cid, subscribe: 1 }));
