@@ -1478,7 +1478,8 @@ function startFiftyLive() {
 
     socket.onopen = () => {
         if (fiftyReqId !== reqId) { try { socket.close(); } catch(e) {} return; }
-        socket.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", subscribe: 1, req_id: reqId }));
+        // Étape 1 : historique classique (même appel que l'ancienne version statique, qui fonctionnait).
+        socket.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", req_id: reqId }));
     };
 
     socket.onmessage = (msg) => {
@@ -1501,6 +1502,9 @@ function startFiftyLive() {
             btn.classList.add('connected');
             document.getElementById('fifty_status').innerText = `🟢 LIVE — ${fiftyPrices.length} ticks — recalcul en continu...`;
             computeFifty(fiftyPrices, fiftyTimes, N, unit, sym, true);
+            // Étape 2 : une fois l'historique reçu, on s'abonne aux ticks live (même appel
+            // que subscribeTicks() du panneau principal, déjà éprouvé) pour la mise à jour continue.
+            socket.send(JSON.stringify({ ticks: sym, subscribe: 1 }));
         } else if (data.msg_type === 'tick' && data.tick) {
             fiftyPrices.push(parseFloat(data.tick.quote));
             fiftyTimes.push(Number(data.tick.epoch));
@@ -1525,7 +1529,11 @@ function startFiftyLive() {
 function stopFiftyLive(msg) {
     fiftyLiveOn = false;
     fiftyReqId = 0;
-    if (fiftyWs) { try { fiftyWs.close(); } catch(e) {} fiftyWs = null; }
+    if (fiftyWs) {
+        try { if (fiftyWs.readyState === WebSocket.OPEN) fiftyWs.send(JSON.stringify({ forget_all: 'ticks' })); } catch(e) {}
+        try { fiftyWs.close(); } catch(e) {}
+        fiftyWs = null;
+    }
     resetFiftyButton();
     if (msg) document.getElementById('fifty_status').innerText = msg;
 }
