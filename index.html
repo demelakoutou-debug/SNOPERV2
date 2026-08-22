@@ -1430,19 +1430,22 @@ function renderTickMinuteHistory() {
 // CALCULATEUR 50/50 — STEP INDEX (aucun signal, aucun indicateur : statistiques pures)
 // ═══════════════════════════════════════════════════════════════════════════════
 // Principe :
-//  1) On récupère l'historique de ticks du symbole choisi (heure serveur Deriv),
-//     puis on RESTE ABONNÉ (subscribe:1) pour recevoir chaque nouveau tick en
-//     temps réel et recalculer les statistiques en continu, sans re-cliquer.
-//  2) Répartition brute : sur tout l'échantillon, % de ticks Hausse / Baisse / Neutre.
-//  3) Fenêtre N -> 2N (ex: 64 -> 128) : pour chaque bloc de référence de N ticks
+//  1) On récupère l'historique de ticks du symbole choisi (heure serveur Deriv).
+//  2) On RÉPÈTE cet appel automatiquement toutes les quelques secondes (polling) pour
+//     recalculer en continu, sans re-cliquer. On réutilise volontairement l'appel
+//     ticks_history classique (sans "subscribe") car certains symboles Step Index
+//     n'acceptent pas l'abonnement temps réel direct sur ce canal public, alors que
+//     l'historique fonctionne toujours pour eux.
+//  3) Répartition brute : sur tout l'échantillon, % de ticks Hausse / Baisse / Neutre.
+//  4) Fenêtre N -> 2N (ex: 64 -> 128) : pour chaque bloc de référence de N ticks
 //     (ou N secondes), on regarde le bloc suivant de même taille et on calcule le
 //     % de fois où il continue dans le même sens (Continuation), l'inverse
 //     (Renversement) ou ne bouge pas net (Neutre).
-//  4) Résultat net sur la fenêtre complète 2N : % Hausse / Baisse / Égal du point
+//  5) Résultat net sur la fenêtre complète 2N : % Hausse / Baisse / Égal du point
 //     de départ au point d'arrivée de la fenêtre complète.
-let fiftyWs = null, fiftyReqId = 0, fiftyLiveOn = false;
+let fiftyWs = null, fiftySessionId = 0, fiftyLiveOn = false, fiftyPollTimer = null, fiftyExpectedReqId = null;
 let fiftyPrices = [], fiftyTimes = [];
-const FIFTY_MAX_BUFFER = 5000;
+const FIFTY_POLL_MS = 3000;
 
 function toggleFiftyLive() {
     if (fiftyLiveOn) { stopFiftyLive('⏹ Live arrêté.'); return; }
@@ -1455,8 +1458,8 @@ function startFiftyLive() {
     const N    = parseInt(document.getElementById('fifty_window').value) || 64;
     if (N < 1) { document.getElementById('fifty_status').innerText = '⚠ Fenêtre invalide.'; return; }
 
-    const reqId = Math.floor(Date.now()/1000)%100000 + Math.floor(Math.random()*100);
-    fiftyReqId = reqId;
+    fiftySessionId++;
+    const sessionId = fiftySessionId;
     fiftyPrices = []; fiftyTimes = [];
 
     const btn = document.getElementById('btnFifty');
@@ -1466,29 +1469,37 @@ function startFiftyLive() {
     document.getElementById('fifty_result').classList.remove('show');
 
     if (fiftyWs) { try { fiftyWs.close(); } catch(e) {} fiftyWs = null; }
+    if (fiftyPollTimer) { clearInterval(fiftyPollTimer); fiftyPollTimer = null; }
     const socket = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
     fiftyWs = socket;
 
     const timer = setTimeout(() => {
-        if (fiftyReqId !== reqId || fiftyLiveOn) return;
+        if (sessionId !== fiftySessionId || fiftyLiveOn) return;
         try { socket.close(); } catch(e) {}
         document.getElementById('fifty_status').innerText = '⏱ Timeout.';
         resetFiftyButton();
     }, 20000);
 
+    const sendHistoryRequest = () => {
+        if (sessionId !== fiftySessionId || !fiftyWs || fiftyWs.readyState !== WebSocket.OPEN) return;
+        fiftyExpectedReqId = Math.floor(Date.now()/1000)%100000 + Math.floor(Math.random()*1000);
+        fiftyWs.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", req_id: fiftyExpectedReqId }));
+    };
+
     socket.onopen = () => {
-        if (fiftyReqId !== reqId) { try { socket.close(); } catch(e) {} return; }
-        // Étape 1 : historique classique (même appel que l'ancienne version statique, qui fonctionnait).
-        socket.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", req_id: reqId }));
+        if (sessionId !== fiftySessionId) { try { socket.close(); } catch(e) {} return; }
+        sendHistoryRequest();
     };
 
     socket.onmessage = (msg) => {
-        if (fiftyReqId !== reqId) return;
+        if (sessionId !== fiftySessionId) return;
         let data; try { data = JSON.parse(msg.data); } catch(e) { return; }
+        if (data.req_id !== fiftyExpectedReqId) return;
         if (data.error) {
             clearTimeout(timer);
             document.getElementById('fifty_status').innerText = '⚠ ' + data.error.message;
             resetFiftyButton();
+            if (fiftyPollTimer) { clearInterval(fiftyPollTimer); fiftyPollTimer = null; }
             try { socket.close(); } catch(e) {}
             return;
         }
@@ -1496,44 +1507,37 @@ function startFiftyLive() {
             clearTimeout(timer);
             fiftyPrices = data.history.prices.map(Number);
             fiftyTimes  = data.history.times.map(Number);
-            fiftyLiveOn = true;
-            const btn = document.getElementById('btnFifty');
-            btn.disabled = false; btn.textContent = '⏹ Arrêter Live';
-            btn.classList.add('connected');
-            document.getElementById('fifty_status').innerText = `🟢 LIVE — ${fiftyPrices.length} ticks — recalcul en continu...`;
-            computeFifty(fiftyPrices, fiftyTimes, N, unit, sym, true);
-            // Étape 2 : une fois l'historique reçu, on s'abonne aux ticks live (même appel
-            // que subscribeTicks() du panneau principal, déjà éprouvé) pour la mise à jour continue.
-            socket.send(JSON.stringify({ ticks: sym, subscribe: 1 }));
-        } else if (data.msg_type === 'tick' && data.tick) {
-            fiftyPrices.push(parseFloat(data.tick.quote));
-            fiftyTimes.push(Number(data.tick.epoch));
-            if (fiftyPrices.length > FIFTY_MAX_BUFFER) { fiftyPrices.shift(); fiftyTimes.shift(); }
+            if (!fiftyLiveOn) {
+                fiftyLiveOn = true;
+                btn.disabled = false; btn.textContent = '⏹ Arrêter Live';
+                btn.classList.add('connected');
+                fiftyPollTimer = setInterval(sendHistoryRequest, FIFTY_POLL_MS);
+            }
+            document.getElementById('fifty_status').innerText = `🟢 LIVE — ${fiftyPrices.length} ticks — maj auto toutes les ${FIFTY_POLL_MS/1000}s`;
             computeFifty(fiftyPrices, fiftyTimes, N, unit, sym, true);
         }
     };
     socket.onerror = () => {
-        if (fiftyReqId !== reqId) return;
+        if (sessionId !== fiftySessionId) return;
         clearTimeout(timer);
         document.getElementById('fifty_status').innerText = '⚠ Erreur de connexion.';
+        if (fiftyPollTimer) { clearInterval(fiftyPollTimer); fiftyPollTimer = null; }
         resetFiftyButton();
     };
     socket.onclose = () => {
-        if (fiftyReqId !== reqId) return;
+        if (sessionId !== fiftySessionId) return;
         clearTimeout(timer);
         if (fiftyLiveOn) document.getElementById('fifty_status').innerText = '⚠ Connexion fermée.';
+        if (fiftyPollTimer) { clearInterval(fiftyPollTimer); fiftyPollTimer = null; }
         resetFiftyButton();
     };
 }
 
 function stopFiftyLive(msg) {
     fiftyLiveOn = false;
-    fiftyReqId = 0;
-    if (fiftyWs) {
-        try { if (fiftyWs.readyState === WebSocket.OPEN) fiftyWs.send(JSON.stringify({ forget_all: 'ticks' })); } catch(e) {}
-        try { fiftyWs.close(); } catch(e) {}
-        fiftyWs = null;
-    }
+    fiftySessionId++;
+    if (fiftyPollTimer) { clearInterval(fiftyPollTimer); fiftyPollTimer = null; }
+    if (fiftyWs) { try { fiftyWs.close(); } catch(e) {} fiftyWs = null; }
     resetFiftyButton();
     if (msg) document.getElementById('fifty_status').innerText = msg;
 }
