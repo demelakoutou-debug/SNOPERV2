@@ -134,27 +134,29 @@
         .connected-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; transition: all 0.3s; }
         .connected-dot.live { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.5s infinite; }
 
-        /* SAG */
-        .sag-layout { display: grid; grid-template-columns: 160px 1fr; gap: 16px; align-items: start; margin-bottom: 14px; }
-        .sag-gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-        .sag-score-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
-        .sag-status { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; font-family: 'Share Tech Mono', monospace; transition: all 0.4s; }
-        .sag-normal   { color: var(--accent); background: #00ff8810; border: 1px solid #00ff8830; }
-        .sag-moderate { color: var(--warn);   background: #ffc80010; border: 1px solid #ffc80030; }
-        .sag-high     { color: #ff8040;       background: #ff804010; border: 1px solid #ff804030; }
-        .sag-critical { color: var(--danger); background: #ff3b3b15; border: 1px solid #ff3b3b40; animation: alertPulse 1s infinite; }
-        .sag-sensors { display: flex; flex-direction: column; gap: 8px; }
-        .sag-sensor { display: grid; grid-template-columns: 90px 1fr 36px; gap: 6px; align-items: center; }
-        .sag-sensor-name { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); }
-        .sag-sensor-bar-wrap { height: 5px; background: #1a2535; border-radius: 3px; overflow: hidden; }
-        .sag-sensor-bar { height: 100%; border-radius: 3px; transition: width 0.4s, background 0.4s; }
-        .sag-sensor-val { font-family: 'Share Tech Mono', monospace; font-size: 10px; text-align: right; transition: color 0.4s; }
-        #sagCanvas { width: 100%; height: 90px; background: #04070b; border: 1px solid var(--border); border-radius: 4px; display: block; margin-bottom: 10px; }
-        .sag-alert { display: none; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; background: #1a0808; border: 1px solid #ff3b3b55; }
-        .sag-alert.show { display: flex; animation: alertPulse 1s infinite; }
-        .sag-alert-text { font-family: 'Share Tech Mono', monospace; font-size: 11px; }
-        .sag-alert-text strong { color: #ff6060; display: block; font-size: 11px; }
-        .sag-radar-wrap { display: flex; justify-content: center; margin-bottom: 10px; }
+        /* TICK/MIN + 5050 */
+        .tm-live { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: #060a0f; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 12px; }
+        .tm-live-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+        .tm-live-minute { font-family: 'Share Tech Mono', monospace; font-size: 1.1rem; color: var(--accent2); }
+        .tm-live-count { font-family: 'Share Tech Mono', monospace; font-size: 2rem; color: #e0eaf5; text-align: right; }
+        .tm-live-count.tm-warn { color: var(--warn); }
+        .tm-live-count.tm-bad  { color: var(--danger); }
+        .tm-hist { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
+        .tm-row { display: grid; grid-template-columns: 1fr 60px 70px; gap: 8px; align-items: center; padding: 6px 10px; font-family: 'Share Tech Mono', monospace; font-size: 11px; border-bottom: 1px solid var(--border); }
+        .tm-row:last-child { border-bottom: none; }
+        .tm-row .tm-min { color: var(--muted); }
+        .tm-row .tm-count { text-align: right; color: #e0eaf5; }
+        .tm-row .tm-flag { text-align: right; font-size: 9px; letter-spacing: 1px; }
+        .tm-flag.ok  { color: var(--accent); }
+        .tm-flag.warn{ color: var(--warn); }
+        .tm-flag.bad { color: var(--danger); }
+        .fifty-result { display: none; }
+        .fifty-result.show { display: block; }
+        .fifty-bar-row { display: grid; grid-template-columns: 100px 1fr 50px; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .fifty-bar-name { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+        .fifty-bar-wrap { height: 8px; background: #1a2535; border-radius: 4px; overflow: hidden; display: flex; }
+        .fifty-bar-seg { height: 100%; transition: width 0.4s; }
+        .fifty-bar-val { font-family: 'Share Tech Mono', monospace; font-size: 11px; text-align: right; }
 
         .eq-btn {
             width: 100%; margin-top: 8px; padding: 5px 4px;
@@ -417,37 +419,67 @@
             </div>
         </div>
 
-        <!-- SAG -->
+        <!-- COMPTEUR TICKS/MINUTE -->
         <div class="panel">
-            <div class="panel-title">Score d'Anomalie Global (SAG)</div>
-            <div class="sag-alert" id="sagAlert">
-                <span style="font-size:1.2rem">🔴</span>
-                <div class="sag-alert-text">
-                    <strong id="sagAlertTitle">ANOMALIE ALGORITHMIQUE DÉTECTÉE</strong>
-                    <span id="sagAlertDesc">Le marché sort de son rythme naturel</span>
+            <div class="panel-title">Ticks / Minute — Heure Serveur Deriv</div>
+            <div class="tm-live">
+                <div>
+                    <div class="tm-live-label">Minute serveur (UTC) en cours</div>
+                    <div class="tm-live-minute" id="tmCurrentMinute">—:—:—</div>
+                </div>
+                <div>
+                    <div class="tm-live-label" style="text-align:right;">Ticks reçus</div>
+                    <div class="tm-live-count" id="tmCurrentCount">0</div>
                 </div>
             </div>
-            <div class="sag-layout">
-                <div class="sag-gauge-wrap">
-                    <span class="sag-score-label">Anomalie</span>
-                    <svg width="120" height="120" viewBox="0 0 120 120">
-                        <circle cx="60" cy="60" r="50" fill="none" stroke="#1a2535" stroke-width="8"/>
-                        <circle id="sagArc" cx="60" cy="60" r="50" fill="none" stroke="#00ff88" stroke-width="8" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset 0.6s,stroke 0.6s;"/>
-                        <text id="sagScoreCenter" x="60" y="56" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="22" fill="#00ff88" style="transition:fill 0.5s;">0</text>
-                        <text x="60" y="74" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="9" fill="#4a5a6a">/100</text>
-                    </svg>
-                    <span class="sag-status sag-normal" id="sagStatus">NORMAL</span>
+            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Historique par minute (attendu ≈ 60/61)</div>
+            <div class="tm-hist" id="tmHistory">
+                <div style="padding:14px;text-align:center;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:10px;">En attente de ticks...</div>
+            </div>
+        </div>
+
+        <!-- CALCULATEUR 50/50 -->
+        <div class="panel">
+            <div class="panel-title">Calculateur 50/50 — Step Index</div>
+            <div class="row">
+                <div style="flex:1">
+                    <label>Symbole</label>
+                    <select id="fifty_symbol">
+                        <option value="stpRNG">Step Index 100</option>
+                        <option value="stpRNG2">Step Index 200</option>
+                        <option value="stpRNG3">Step Index 300</option>
+                        <option value="stpRNG4">Step Index 400</option>
+                        <option value="stpRNG5">Step Index 500</option>
+                    </select>
                 </div>
-                <div class="sag-sensors">
-                    <div class="sag-sensor"><span class="sag-sensor-name">AMPLITUDE</span><div class="sag-sensor-bar-wrap"><div class="sag-sensor-bar" id="barAmp" style="width:0%;background:#00ff88;"></div></div><span class="sag-sensor-val" id="valAmp" style="color:#00ff88;">0</span></div>
-                    <div class="sag-sensor"><span class="sag-sensor-name">TIMING</span><div class="sag-sensor-bar-wrap"><div class="sag-sensor-bar" id="barTim" style="width:0%;background:#00ff88;"></div></div><span class="sag-sensor-val" id="valTim" style="color:#00ff88;">0</span></div>
-                    <div class="sag-sensor"><span class="sag-sensor-name">ALTERNANCE</span><div class="sag-sensor-bar-wrap"><div class="sag-sensor-bar" id="barAlt" style="width:0%;background:#00ff88;"></div></div><span class="sag-sensor-val" id="valAlt" style="color:#00ff88;">0</span></div>
-                    <div class="sag-sensor"><span class="sag-sensor-name">RÉGULARITÉ</span><div class="sag-sensor-bar-wrap"><div class="sag-sensor-bar" id="barReg" style="width:0%;background:#00ff88;"></div></div><span class="sag-sensor-val" id="valReg" style="color:#00ff88;">0</span></div>
-                    <div class="sag-radar-wrap" style="margin-top:6px;"><canvas id="radarCanvas" width="160" height="140" style="background:transparent;"></canvas></div>
+                <div style="flex:1">
+                    <label>Unité</label>
+                    <select id="fifty_unit">
+                        <option value="t">Ticks</option>
+                        <option value="s">Secondes</option>
+                    </select>
                 </div>
             </div>
-            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Historique SAG — 100 derniers scores</div>
-            <canvas id="sagCanvas"></canvas>
+            <label>Taille de fenêtre (ex: 64)</label>
+            <input type="number" id="fifty_window" value="64" min="1">
+            <button class="btn btn-connect" id="btnFifty" onclick="runFifty()">Calculer 50/50</button>
+            <div id="fifty_status" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-top:8px;"></div>
+
+            <div class="fifty-result" id="fifty_result">
+                <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:14px 0 8px;">Répartition brute des ticks (échantillon complet)</div>
+                <div class="fifty-bar-row"><span class="fifty-bar-name">Hausse</span><div class="fifty-bar-wrap"><div class="fifty-bar-seg" id="f_raw_up" style="background:var(--accent);width:0%"></div><div class="fifty-bar-seg" id="f_raw_down" style="background:var(--danger);width:0%"></div><div class="fifty-bar-seg" id="f_raw_flat" style="background:var(--warn);width:0%"></div></div><span class="fifty-bar-val" id="f_raw_up_val">—</span></div>
+                <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:14px;"><span id="f_raw_down_val">Baisse —</span><span id="f_raw_flat_val">Neutre —</span></div>
+
+                <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Fenêtre N → 2N (ex: 64 → 128) : réaction du 2e bloc</div>
+                <div class="fifty-bar-row"><span class="fifty-bar-name">Continuation</span><div class="fifty-bar-wrap"><div class="fifty-bar-seg" id="f_cont" style="background:var(--accent2);width:0%"></div><div class="fifty-bar-seg" id="f_rev" style="background:#9a7aff;width:0%"></div><div class="fifty-bar-seg" id="f_neu" style="background:var(--muted);width:0%"></div></div><span class="fifty-bar-val" id="f_cont_val">—</span></div>
+                <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:14px;"><span id="f_rev_val">Renversement —</span><span id="f_neu_val">Neutre —</span></div>
+
+                <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Résultat net sur la fenêtre complète (2N)</div>
+                <div class="fifty-bar-row"><span class="fifty-bar-name">Hausse nette</span><div class="fifty-bar-wrap"><div class="fifty-bar-seg" id="f_net_up" style="background:var(--accent);width:0%"></div><div class="fifty-bar-seg" id="f_net_down" style="background:var(--danger);width:0%"></div><div class="fifty-bar-seg" id="f_net_flat" style="background:var(--warn);width:0%"></div></div><span class="fifty-bar-val" id="f_net_up_val">—</span></div>
+                <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);"><span id="f_net_down_val">Baisse —</span><span id="f_net_flat_val">Égal —</span></div>
+
+                <div id="fifty_summary" style="margin-top:14px;background:#060a0f;border:1px solid var(--border);border-radius:4px;padding:10px;font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.8;color:#7a9bb5;"></div>
+            </div>
         </div>
 
         <!-- Analyseur de Flux -->
@@ -588,11 +620,12 @@ let wsReconnectTimer = null;
 let wsReconnectAttempt = 0;
 
 let tickHistory   = [];
-let sagPrices     = [];
-let sagTimings    = [];
-let sagHistory    = [];
-let sagLastTickMs = 0;
-let sagLastAlert  = 0;
+
+// Compteur de ticks/minute (calibré sur l'heure serveur Deriv via tick.epoch)
+let tmCurrentMinuteKey = null;
+let tmCurrentCount     = 0;
+let tmHistoryList      = []; // { minuteKey, label, count }
+const TM_MAX_HIST      = 20;
 
 let isAuto        = false;
 let lastTickTime  = 0;
@@ -607,9 +640,6 @@ let wins          = 0;
 let losses        = 0;
 let cumulativePnl = 0;
 let pendingContracts = {};
-
-const SAG_WINDOW   = 30;
-const SAG_MAX_HIST = 100;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTH — OAUTH2 PKCE
@@ -981,8 +1011,12 @@ function isEq(id) { return document.getElementById(id)?.classList.contains('eq-o
 // TICKS & BUFFERS
 // ═══════════════════════════════════════════════════════════════════════════════
 function resetBuffers() {
-    tickHistory = []; sagPrices = []; sagTimings = []; sagHistory = [];
-    sagLastTickMs = 0; lastTickTime = 0;
+    tickHistory = []; lastTickTime = 0;
+    tmCurrentMinuteKey = null; tmCurrentCount = 0; tmHistoryList = [];
+    document.getElementById('tmCurrentMinute').innerText = '—:—:—';
+    document.getElementById('tmCurrentCount').innerText = '0';
+    document.getElementById('tmCurrentCount').className = 'tm-live-count';
+    document.getElementById('tmHistory').innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-family:\'Share Tech Mono\',monospace;font-size:10px;">En attente de ticks...</div>';
     ['lastPrice','velocity','netDir','bollinger'].forEach(id => document.getElementById(id).innerText = '—');
     ['condVel','condDir','condDist','condBoll'].forEach(id => document.getElementById(id).className = 'ind ind-off');
 }
@@ -1019,7 +1053,7 @@ function processTick(tick) {
     if (tickHistory.length > 20) tickHistory.shift();
     document.getElementById('lastPrice').innerText = price.toFixed(1);
 
-    updateSAG(price, nowMs);
+    updateTickMinuteCounter(tick.epoch);
 
     if (tickHistory.length >= 10) {
         let dir = 0;
@@ -1331,117 +1365,217 @@ function clearTrades() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SAG
+// COMPTEUR DE TICKS / MINUTE — calibré sur l'heure serveur Deriv (tick.epoch)
 // ═══════════════════════════════════════════════════════════════════════════════
-function updateSAG(price, nowMs) {
-    sagPrices.push(price);
-    if (sagPrices.length > SAG_WINDOW) sagPrices.shift();
-    if (sagLastTickMs > 0) { sagTimings.push(nowMs - sagLastTickMs); if (sagTimings.length > 40) sagTimings.shift(); }
-    sagLastTickMs = nowMs;
-    if (sagPrices.length < 12) return;
-    const sA = sensorAmplitude(sagPrices), sT = sensorTiming(sagTimings), sL = sensorAlternance(sagPrices), sR = sensorRegularite(sagPrices);
-    const score = Math.round(sA*0.30 + sT*0.25 + sL*0.25 + sR*0.20);
-    renderSAG(score, sA, sT, sL, sR);
-    const color = sagColor(score);
-    sagHistory.push({ score, color, time: new Date().toLocaleTimeString('fr',{hour12:false}) });
-    if (sagHistory.length > SAG_MAX_HIST) sagHistory.shift();
-    drawSagCanvas(); drawRadar(sA, sT, sL, sR);
-    if (score >= 60 && (nowMs - sagLastAlert) > 30000) { sagLastAlert=nowMs; triggerSagAlert(score,sA,sT,sL,sR); }
+// tick.epoch est le timestamp Unix (secondes, UTC) fourni par le serveur Deriv
+// avec chaque tick. On regroupe donc les ticks par minute serveur (et non par
+// horloge locale du navigateur) pour vérifier objectivement le débit réel.
+function updateTickMinuteCounter(epoch) {
+    if (!epoch) return;
+    const minuteKey = Math.floor(epoch / 60);
+
+    if (tmCurrentMinuteKey === null) {
+        tmCurrentMinuteKey = minuteKey;
+        tmCurrentCount = 0;
+    } else if (minuteKey !== tmCurrentMinuteKey) {
+        // La minute serveur précédente est terminée : on l'archive.
+        finalizeTickMinute(tmCurrentMinuteKey, tmCurrentCount);
+        tmCurrentMinuteKey = minuteKey;
+        tmCurrentCount = 0;
+    }
+    tmCurrentCount++;
+
+    const label = minuteLabel(minuteKey);
+    const liveEl = document.getElementById('tmCurrentMinute');
+    const countEl = document.getElementById('tmCurrentCount');
+    if (liveEl) liveEl.innerText = label;
+    if (countEl) {
+        countEl.innerText = tmCurrentCount;
+        countEl.className = 'tm-live-count' + (tmCurrentCount > 61 || tmCurrentCount < 55 ? ' tm-bad' : (tmCurrentCount !== 60 && tmCurrentCount !== 61 ? ' tm-warn' : ''));
+    }
 }
 
-function sensorAmplitude(p) {
-    if (p.length<10) return 0;
-    const s=[]; for(let i=1;i<p.length;i++) s.push(Math.abs(p[i]-p[i-1]));
-    const m=s.reduce((a,b)=>a+b,0)/s.length, cv=m>0?Math.sqrt(s.reduce((a,b)=>a+Math.pow(b-m,2),0)/s.length)/m:0;
-    if(cv<0.15) return Math.round((0.15-cv)/0.15*100);
-    if(cv>0.9)  return Math.min(Math.round((cv-0.9)/0.6*100),100);
-    return 0;
+function minuteLabel(minuteKey) {
+    const d = new Date(minuteKey * 60000);
+    const hh = String(d.getUTCHours()).padStart(2,'0');
+    const mm = String(d.getUTCMinutes()).padStart(2,'0');
+    return `${hh}:${mm} UTC`;
 }
-function sensorTiming(t) {
-    if(t.length<8) return 0;
-    const r=t.slice(-20), m=r.reduce((a,b)=>a+b,0)/r.length, cv=m>0?Math.sqrt(r.reduce((a,b)=>a+Math.pow(b-m,2),0)/r.length)/m:0;
-    if(cv<0.05) return Math.round((0.05-cv)/0.05*100);
-    if(cv>0.5)  return Math.min(Math.round((cv-0.5)/1.0*100),100);
-    return 0;
+
+function finalizeTickMinute(minuteKey, count) {
+    tmHistoryList.unshift({ minuteKey, label: minuteLabel(minuteKey), count });
+    if (tmHistoryList.length > TM_MAX_HIST) tmHistoryList.pop();
+    renderTickMinuteHistory();
 }
-function sensorAlternance(p) {
-    if(p.length<12) return 0;
-    const d=[]; for(let i=1;i<p.length;i++) d.push(p[i]>p[i-1]?1:p[i]<p[i-1]?-1:0);
-    let mx=1,cr=1,pa=0; for(let i=1;i<d.length;i++) { if(d[i]===d[i-1]&&d[i]!==0){cr++;mx=Math.max(mx,cr);}else cr=1; if(d[i]!==0&&d[i-1]!==0&&d[i]!==d[i-1])pa++; }
-    const nz=d.filter(x=>x!==0).length, ar=nz>1?pa/(nz-1):0;
-    return Math.min(Math.max(Math.min(Math.max((mx-4)*16,0),100), ar>0.85?Math.round((ar-0.85)/0.15*100):0),100);
-}
-function sensorRegularite(p) {
-    if(p.length<12) return 0;
-    const s=[]; for(let i=1;i<p.length;i++) s.push(p[i]-p[i-1]);
-    const n=s.length-1; if(n<5) return 0;
-    const m=s.reduce((a,b)=>a+b,0)/s.length;
-    let num=0,den=0; for(let i=0;i<n;i++) num+=(s[i]-m)*(s[i+1]-m); for(let i=0;i<s.length;i++) den+=Math.pow(s[i]-m,2);
-    const acf=den>0?num/den:0, a=Math.abs(acf);
-    return a>0.25?Math.min(Math.round((a-0.25)/0.75*100),100):0;
-}
-function sagColor(s) { return s<30?'#00ff88':s<55?'#ffc800':s<75?'#ff8040':'#ff3b3b'; }
-function sagLabel(s) { return s<30?['NORMAL','sag-normal']:s<55?['MODÉRÉ','sag-moderate']:s<75?['ÉLEVÉ','sag-high']:['CRITIQUE','sag-critical']; }
-function renderSAG(score,sA,sT,sL,sR) {
-    const c=sagColor(score),[l,cl]=sagLabel(score);
-    const arc=document.getElementById('sagArc'); if(arc){arc.style.strokeDashoffset=314-(score/100)*314;arc.style.stroke=c;}
-    const ct=document.getElementById('sagScoreCenter'); if(ct){ct.textContent=score;ct.style.fill=c;}
-    const st=document.getElementById('sagStatus'); if(st){st.textContent=l;st.className='sag-status '+cl;}
-    [['Amp',sA],['Tim',sT],['Alt',sL],['Reg',sR]].forEach(([id,v])=>{
-        const col=sagColor(v);
-        const b=document.getElementById('bar'+id); if(b){b.style.width=v+'%';b.style.background=col;}
-        const lbl=document.getElementById('val'+id); if(lbl){lbl.textContent=v;lbl.style.color=col;}
-    });
-}
-function triggerSagAlert(score,sA,sT,sL,sR) {
-    const dom=[{n:'Amplitude',v:sA},{n:'Timing',v:sT},{n:'Alternance',v:sL},{n:'Régularité',v:sR}].sort((a,b)=>b.v-a.v)[0];
-    document.getElementById('sagAlertTitle').textContent = score>=75?'🔴 ANOMALIE CRITIQUE':'🟡 ANOMALIE MODÉRÉE';
-    document.getElementById('sagAlertDesc').textContent  = `Score: ${score}/100 | ${dom.n} (${dom.v})`;
-    const el=document.getElementById('sagAlert'); el.classList.add('show');
-    log(`⚡ SAG ${score}/100`, score>=75?'#ff3b3b':'#ffc800');
-    setTimeout(()=>el.classList.remove('show'),10000);
-}
-function drawSagCanvas() {
-    const canvas=document.getElementById('sagCanvas'); if(!canvas||sagHistory.length<2) return;
-    const dpr=window.devicePixelRatio||1, W=canvas.offsetWidth||400, H=canvas.offsetHeight||90;
-    canvas.width=W*dpr; canvas.height=H*dpr;
-    const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
-    const pL=28,pR=6,pT=6,pB=16,cW=W-pL-pR,cH=H-pT-pB;
-    [30,55,75].forEach(v=>{
-        const y=pT+cH-(v/100)*cH;
-        ctx.strokeStyle=v>=75?'#ff3b3b22':v>=55?'#ffc80022':'#00ff8822'; ctx.lineWidth=1; ctx.setLineDash([3,4]);
-        ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(W-pR,y);ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle='#2a4060'; ctx.font='9px Share Tech Mono,monospace'; ctx.fillText(v,0,y+3);
-    });
-    const data=sagHistory;
-    ctx.beginPath(); data.forEach((pt,i)=>{const x=pL+(i/(SAG_MAX_HIST-1))*cW,y=pT+cH-(pt.score/100)*cH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
-    const lx=pL+((data.length-1)/(SAG_MAX_HIST-1))*cW; ctx.lineTo(lx,pT+cH);ctx.lineTo(pL,pT+cH);ctx.closePath();
-    const grd=ctx.createLinearGradient(0,pT,0,pT+cH), ls=data[data.length-1].score;
-    grd.addColorStop(0,ls>=75?'#ff3b3b30':ls>=55?'#ffc80030':'#00ff8820'); grd.addColorStop(1,'transparent');
-    ctx.fillStyle=grd; ctx.fill();
-    for(let i=1;i<data.length;i++){
-        const x0=pL+((i-1)/(SAG_MAX_HIST-1))*cW,y0=pT+cH-(data[i-1].score/100)*cH,x1=pL+(i/(SAG_MAX_HIST-1))*cW,y1=pT+cH-(data[i].score/100)*cH;
-        ctx.beginPath();ctx.strokeStyle=data[i].color;ctx.lineWidth=1.5;ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+
+function renderTickMinuteHistory() {
+    const el = document.getElementById('tmHistory');
+    if (!el) return;
+    if (tmHistoryList.length === 0) {
+        el.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-family:\'Share Tech Mono\',monospace;font-size:10px;">En attente de ticks...</div>';
+        return;
     }
-    const last=data[data.length-1],px=pL+((data.length-1)/(SAG_MAX_HIST-1))*cW,py=pT+cH-(last.score/100)*cH;
-    ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fillStyle=last.color;ctx.fill();
-    ctx.fillStyle='#2a4060';ctx.font='9px Share Tech Mono,monospace';
-    if(data[0]) ctx.fillText(data[0].time,pL,H-2);
-    ctx.fillText(last.time,W-pR-ctx.measureText(last.time).width,H-2);
+    el.innerHTML = tmHistoryList.map(m => {
+        const diff = Math.abs(m.count - 60);
+        let flagClass = 'ok', flagTxt = '✓ 1/s';
+        if (m.count !== 60 && m.count !== 61) {
+            if (diff <= 2) { flagClass = 'warn'; flagTxt = m.count > 60 ? `+${m.count-60}` : `${m.count-60}`; }
+            else { flagClass = 'bad'; flagTxt = m.count > 60 ? `+${m.count-60}` : `${m.count-60}`; }
+        }
+        return `<div class="tm-row"><span class="tm-min">${m.label}</span><span class="tm-count">${m.count} ticks</span><span class="tm-flag ${flagClass}">${flagTxt}</span></div>`;
+    }).join('');
 }
-function drawRadar(sA,sT,sL,sR) {
-    const canvas=document.getElementById('radarCanvas'); if(!canvas) return;
-    const dpr=window.devicePixelRatio||1; canvas.width=160*dpr; canvas.height=140*dpr;
-    const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,160,140);
-    const cx=80,cy=68,r=50,vals=[sA/100,sT/100,sL/100,sR/100],labels=['AMP','TIM','ALT','RÉG'],angles=[-Math.PI/2,0,Math.PI/2,Math.PI];
-    [0.25,0.5,0.75,1].forEach(t=>{ctx.beginPath();angles.forEach((a,i)=>{const x=cx+Math.cos(a)*r*t,y=cy+Math.sin(a)*r*t;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.closePath();ctx.strokeStyle='#1a2535';ctx.lineWidth=1;ctx.stroke();});
-    angles.forEach(a=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);ctx.strokeStyle='#1e2d3d';ctx.lineWidth=0.5;ctx.stroke();});
-    const mv=Math.max(...vals), fc=mv>=0.75?'#ff3b3b':mv>=0.55?'#ff8040':mv>=0.30?'#ffc800':'#00ff88';
-    ctx.beginPath();angles.forEach((a,i)=>{const x=cx+Math.cos(a)*r*vals[i],y=cy+Math.sin(a)*r*vals[i];i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
-    ctx.closePath();ctx.fillStyle=fc+'30';ctx.fill();ctx.strokeStyle=fc;ctx.lineWidth=1.5;ctx.stroke();
-    angles.forEach((a,i)=>{ctx.beginPath();ctx.arc(cx+Math.cos(a)*r*vals[i],cy+Math.sin(a)*r*vals[i],3,0,Math.PI*2);ctx.fillStyle=fc;ctx.fill();});
-    ctx.font='bold 9px Share Tech Mono,monospace';ctx.fillStyle='#4a5a6a';ctx.textAlign='center';
-    angles.forEach((a,i)=>ctx.fillText(labels[i],cx+Math.cos(a)*(r+14),cy+Math.sin(a)*(r+12)+3));
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CALCULATEUR 50/50 — STEP INDEX (aucun signal, aucun indicateur : statistiques pures)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Principe :
+//  1) On récupère l'historique de ticks du symbole choisi (heure serveur Deriv).
+//  2) Répartition brute : sur tout l'échantillon, % de ticks Hausse / Baisse / Neutre.
+//  3) Fenêtre N -> 2N (ex: 64 -> 128) : pour chaque bloc de référence de N ticks
+//     (ou N secondes), on regarde le bloc suivant de même taille et on calcule le
+//     % de fois où il continue dans le même sens (Continuation), l'inverse
+//     (Renversement) ou ne bouge pas net (Neutre).
+//  4) Résultat net sur la fenêtre complète 2N : % Hausse / Baisse / Égal du point
+//     de départ au point d'arrivée de la fenêtre complète.
+let fiftyWs = null, fiftyReqId = 0;
+
+function runFifty() {
+    const sym    = document.getElementById('fifty_symbol').value;
+    const unit   = document.getElementById('fifty_unit').value;
+    const N      = parseInt(document.getElementById('fifty_window').value) || 64;
+    if (N < 1) { document.getElementById('fifty_status').innerText = '⚠ Fenêtre invalide.'; return; }
+
+    const reqId = Math.floor(Date.now()/1000)%100000 + Math.floor(Math.random()*100);
+    fiftyReqId = reqId;
+    document.getElementById('btnFifty').disabled = true;
+    document.getElementById('fifty_status').innerText = `Récupération de l'historique ${symbolLabel(sym)}...`;
+    document.getElementById('fifty_result').classList.remove('show');
+
+    if (fiftyWs) { try { fiftyWs.close(); } catch(e) {} fiftyWs = null; }
+    const socket = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+    fiftyWs = socket;
+    let done = false;
+    const cleanup = () => { done = true; fiftyWs = null; try { socket.close(); } catch(e) {} };
+    const timer = setTimeout(() => {
+        if (done || fiftyReqId !== reqId) return;
+        cleanup();
+        document.getElementById('fifty_status').innerText = '⏱ Timeout.';
+        document.getElementById('btnFifty').disabled = false;
+    }, 20000);
+
+    socket.onopen = () => {
+        if (fiftyReqId !== reqId) { cleanup(); clearTimeout(timer); return; }
+        socket.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", req_id: reqId }));
+    };
+    socket.onmessage = (msg) => {
+        if (done) return;
+        let data; try { data = JSON.parse(msg.data); } catch(e) { return; }
+        if (data.req_id !== reqId || data.msg_type !== 'history') return;
+        clearTimeout(timer); cleanup();
+        if (fiftyReqId !== reqId) return;
+        if (data.error) {
+            document.getElementById('btnFifty').disabled = false;
+            document.getElementById('fifty_status').innerText = '⚠ ' + data.error.message;
+            return;
+        }
+        const prices = data.history.prices.map(Number), times = data.history.times.map(Number);
+        document.getElementById('fifty_status').innerText = `${prices.length} ticks — calcul en cours...`;
+        setTimeout(() => { if (fiftyReqId === reqId) computeFifty(prices, times, N, unit, sym); }, 20);
+    };
+    socket.onerror = () => { if (done) return; clearTimeout(timer); cleanup(); document.getElementById('btnFifty').disabled = false; document.getElementById('fifty_status').innerText = '⚠ Erreur de connexion.'; };
+    socket.onclose = () => { if (done) return; clearTimeout(timer); cleanup(); if (fiftyReqId !== reqId) return; document.getElementById('btnFifty').disabled = false; document.getElementById('fifty_status').innerText = '⚠ Connexion fermée.'; };
+}
+
+function computeFifty(prices, times, N, unit, sym) {
+    const L = prices.length;
+    document.getElementById('btnFifty').disabled = false;
+
+    // 1) Répartition brute tick-à-tick sur tout l'échantillon
+    let up=0, down=0, flat=0;
+    for (let i=1;i<L;i++) { if (prices[i]>prices[i-1]) up++; else if (prices[i]<prices[i-1]) down++; else flat++; }
+    const totTicks = up+down+flat;
+
+    // Construit les indices de fin de bloc de taille N à partir d'un index de départ,
+    // en mode ticks (compte fixe) ou secondes (basé sur l'heure serveur = times[]).
+    function blockEnd(startIdx, size) {
+        if (unit === 't') {
+            const end = startIdx + size;
+            return end < L ? end : -1;
+        } else {
+            const target = times[startIdx] + size;
+            for (let j = startIdx+1; j<L; j++) if (times[j] >= target) return j;
+            return -1;
+        }
+    }
+
+    // 2) Fenêtre N -> 2N : continuation / renversement / neutre du 2e bloc
+    // 3) Résultat net sur la fenêtre complète 2N
+    let cont=0, rev=0, neu=0, netUp=0, netDown=0, netFlat=0, windows=0;
+    for (let i=0; i<L; i++) {
+        const mid = blockEnd(i, N);
+        if (mid === -1) break;
+        const end = blockEnd(mid, N);
+        if (end === -1) break;
+        windows++;
+
+        const refDir  = Math.sign(prices[mid]-prices[i]);
+        const contDir = Math.sign(prices[end]-prices[mid]);
+        if (refDir === 0 || contDir === 0) neu++;
+        else if (refDir === contDir) cont++;
+        else rev++;
+
+        const netDir = Math.sign(prices[end]-prices[i]);
+        if (netDir>0) netUp++; else if (netDir<0) netDown++; else netFlat++;
+
+        if (unit === 's') i += Math.max(0, (mid - i) - 1); // avance approx. pour limiter le nombre de fenêtres en mode secondes
+    }
+
+    if (windows < 5) {
+        document.getElementById('fifty_status').innerText = `⚠ Pas assez de données pour une fenêtre de ${N} ${unit==='t'?'ticks':'secondes'} (${windows} fenêtres).`;
+        return;
+    }
+
+    renderFifty({ sym, N, unit, totTicks, up, down, flat, windows, cont, rev, neu, netUp, netDown, netFlat });
+}
+
+function renderFifty(r) {
+    document.getElementById('fifty_status').innerText = `✓ ${r.sym ? symbolLabel(r.sym) : ''} — ${r.windows} fenêtres analysées — ${new Date().toLocaleTimeString('fr',{hour12:false})}`;
+    document.getElementById('fifty_result').classList.add('show');
+
+    const pct = (a,b) => b>0 ? (a/b*100) : 0;
+    const setBar = (segId, valId, pct, label) => {
+        document.getElementById(segId).style.width = pct.toFixed(1)+'%';
+        if (valId) document.getElementById(valId).textContent = `${label} ${pct.toFixed(1)}%`;
+    };
+
+    const rawUpP = pct(r.up, r.totTicks), rawDownP = pct(r.down, r.totTicks), rawFlatP = pct(r.flat, r.totTicks);
+    setBar('f_raw_up', null, rawUpP); setBar('f_raw_down', null, rawDownP); setBar('f_raw_flat', null, rawFlatP);
+    document.getElementById('f_raw_up_val').textContent = `Hausse ${rawUpP.toFixed(1)}%`;
+    document.getElementById('f_raw_down_val').textContent = `Baisse ${rawDownP.toFixed(1)}%`;
+    document.getElementById('f_raw_flat_val').textContent = `Neutre ${rawFlatP.toFixed(1)}%`;
+
+    const contP = pct(r.cont, r.windows), revP = pct(r.rev, r.windows), neuP = pct(r.neu, r.windows);
+    setBar('f_cont', null, contP); setBar('f_rev', null, revP); setBar('f_neu', null, neuP);
+    document.getElementById('f_cont_val').textContent = `Continuation ${contP.toFixed(1)}%`;
+    document.getElementById('f_rev_val').textContent = `Renversement ${revP.toFixed(1)}%`;
+    document.getElementById('f_neu_val').textContent = `Neutre ${neuP.toFixed(1)}%`;
+
+    const netUpP = pct(r.netUp, r.windows), netDownP = pct(r.netDown, r.windows), netFlatP = pct(r.netFlat, r.windows);
+    setBar('f_net_up', null, netUpP); setBar('f_net_down', null, netDownP); setBar('f_net_flat', null, netFlatP);
+    document.getElementById('f_net_up_val').textContent = `Hausse ${netUpP.toFixed(1)}%`;
+    document.getElementById('f_net_down_val').textContent = `Baisse ${netDownP.toFixed(1)}%`;
+    document.getElementById('f_net_flat_val').textContent = `Égal ${netFlatP.toFixed(1)}%`;
+
+    const uL = r.unit==='t' ? 'ticks' : 'secondes';
+    document.getElementById('fifty_summary').innerText = [
+        `◆ Fenêtre : ${r.N} ${uL} (test ${r.N}→${r.N*2})`,
+        `◆ Échantillon brut : ${r.totTicks} ticks | Hausse ${rawUpP.toFixed(1)}% / Baisse ${rawDownP.toFixed(1)}% / Neutre ${rawFlatP.toFixed(1)}%`,
+        `◆ ${r.windows} fenêtres testées`,
+        `◆ 2e bloc : Continuation ${contP.toFixed(1)}% | Renversement ${revP.toFixed(1)}% | Neutre ${neuP.toFixed(1)}%`,
+        `◆ Fenêtre complète (2N) : Hausse ${netUpP.toFixed(1)}% | Baisse ${netDownP.toFixed(1)}% | Égal ${netFlatP.toFixed(1)}%`,
+        `◆ Écart au 50/50 (continuation vs renversement) : ${Math.abs(contP-revP).toFixed(1)} pts`
+    ].join('\n');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
