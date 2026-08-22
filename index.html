@@ -462,7 +462,7 @@
             </div>
             <label>Taille de fenêtre (ex: 64)</label>
             <input type="number" id="fifty_window" value="64" min="1">
-            <button class="btn btn-connect" id="btnFifty" onclick="runFifty()">Calculer 50/50</button>
+            <button class="btn btn-connect" id="btnFifty" onclick="toggleFiftyLive()">▶ Démarrer 50/50 Live</button>
             <div id="fifty_status" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-top:8px;"></div>
 
             <div class="fifty-result" id="fifty_result">
@@ -625,7 +625,7 @@ let tickHistory   = [];
 let tmCurrentMinuteKey = null;
 let tmCurrentCount     = 0;
 let tmHistoryList      = []; // { minuteKey, label, count }
-const TM_MAX_HIST      = 20;
+const TM_MAX_HIST      = 3;
 
 let isAuto        = false;
 let lastTickTime  = 0;
@@ -1430,7 +1430,9 @@ function renderTickMinuteHistory() {
 // CALCULATEUR 50/50 — STEP INDEX (aucun signal, aucun indicateur : statistiques pures)
 // ═══════════════════════════════════════════════════════════════════════════════
 // Principe :
-//  1) On récupère l'historique de ticks du symbole choisi (heure serveur Deriv).
+//  1) On récupère l'historique de ticks du symbole choisi (heure serveur Deriv),
+//     puis on RESTE ABONNÉ (subscribe:1) pour recevoir chaque nouveau tick en
+//     temps réel et recalculer les statistiques en continu, sans re-cliquer.
 //  2) Répartition brute : sur tout l'échantillon, % de ticks Hausse / Baisse / Neutre.
 //  3) Fenêtre N -> 2N (ex: 64 -> 128) : pour chaque bloc de référence de N ticks
 //     (ou N secondes), on regarde le bloc suivant de même taille et on calcule le
@@ -1438,58 +1440,107 @@ function renderTickMinuteHistory() {
 //     (Renversement) ou ne bouge pas net (Neutre).
 //  4) Résultat net sur la fenêtre complète 2N : % Hausse / Baisse / Égal du point
 //     de départ au point d'arrivée de la fenêtre complète.
-let fiftyWs = null, fiftyReqId = 0;
+let fiftyWs = null, fiftyReqId = 0, fiftyLiveOn = false;
+let fiftyPrices = [], fiftyTimes = [];
+const FIFTY_MAX_BUFFER = 5000;
 
-function runFifty() {
-    const sym    = document.getElementById('fifty_symbol').value;
-    const unit   = document.getElementById('fifty_unit').value;
-    const N      = parseInt(document.getElementById('fifty_window').value) || 64;
+function toggleFiftyLive() {
+    if (fiftyLiveOn) { stopFiftyLive('⏹ Live arrêté.'); return; }
+    startFiftyLive();
+}
+
+function startFiftyLive() {
+    const sym  = document.getElementById('fifty_symbol').value;
+    const unit = document.getElementById('fifty_unit').value;
+    const N    = parseInt(document.getElementById('fifty_window').value) || 64;
     if (N < 1) { document.getElementById('fifty_status').innerText = '⚠ Fenêtre invalide.'; return; }
 
     const reqId = Math.floor(Date.now()/1000)%100000 + Math.floor(Math.random()*100);
     fiftyReqId = reqId;
-    document.getElementById('btnFifty').disabled = true;
+    fiftyPrices = []; fiftyTimes = [];
+
+    const btn = document.getElementById('btnFifty');
+    btn.disabled = true; btn.textContent = '⏳ Connexion...';
+    ['fifty_symbol','fifty_unit','fifty_window'].forEach(id => document.getElementById(id).disabled = true);
     document.getElementById('fifty_status').innerText = `Récupération de l'historique ${symbolLabel(sym)}...`;
     document.getElementById('fifty_result').classList.remove('show');
 
     if (fiftyWs) { try { fiftyWs.close(); } catch(e) {} fiftyWs = null; }
     const socket = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
     fiftyWs = socket;
-    let done = false;
-    const cleanup = () => { done = true; fiftyWs = null; try { socket.close(); } catch(e) {} };
+
     const timer = setTimeout(() => {
-        if (done || fiftyReqId !== reqId) return;
-        cleanup();
+        if (fiftyReqId !== reqId || fiftyLiveOn) return;
+        try { socket.close(); } catch(e) {}
         document.getElementById('fifty_status').innerText = '⏱ Timeout.';
-        document.getElementById('btnFifty').disabled = false;
+        resetFiftyButton();
     }, 20000);
 
     socket.onopen = () => {
-        if (fiftyReqId !== reqId) { cleanup(); clearTimeout(timer); return; }
-        socket.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", req_id: reqId }));
+        if (fiftyReqId !== reqId) { try { socket.close(); } catch(e) {} return; }
+        socket.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", subscribe: 1, req_id: reqId }));
     };
+
     socket.onmessage = (msg) => {
-        if (done) return;
-        let data; try { data = JSON.parse(msg.data); } catch(e) { return; }
-        if (data.req_id !== reqId || data.msg_type !== 'history') return;
-        clearTimeout(timer); cleanup();
         if (fiftyReqId !== reqId) return;
+        let data; try { data = JSON.parse(msg.data); } catch(e) { return; }
         if (data.error) {
-            document.getElementById('btnFifty').disabled = false;
+            clearTimeout(timer);
             document.getElementById('fifty_status').innerText = '⚠ ' + data.error.message;
+            resetFiftyButton();
+            try { socket.close(); } catch(e) {}
             return;
         }
-        const prices = data.history.prices.map(Number), times = data.history.times.map(Number);
-        document.getElementById('fifty_status').innerText = `${prices.length} ticks — calcul en cours...`;
-        setTimeout(() => { if (fiftyReqId === reqId) computeFifty(prices, times, N, unit, sym); }, 20);
+        if (data.msg_type === 'history') {
+            clearTimeout(timer);
+            fiftyPrices = data.history.prices.map(Number);
+            fiftyTimes  = data.history.times.map(Number);
+            fiftyLiveOn = true;
+            const btn = document.getElementById('btnFifty');
+            btn.disabled = false; btn.textContent = '⏹ Arrêter Live';
+            btn.classList.add('connected');
+            document.getElementById('fifty_status').innerText = `🟢 LIVE — ${fiftyPrices.length} ticks — recalcul en continu...`;
+            computeFifty(fiftyPrices, fiftyTimes, N, unit, sym, true);
+        } else if (data.msg_type === 'tick' && data.tick) {
+            fiftyPrices.push(parseFloat(data.tick.quote));
+            fiftyTimes.push(Number(data.tick.epoch));
+            if (fiftyPrices.length > FIFTY_MAX_BUFFER) { fiftyPrices.shift(); fiftyTimes.shift(); }
+            computeFifty(fiftyPrices, fiftyTimes, N, unit, sym, true);
+        }
     };
-    socket.onerror = () => { if (done) return; clearTimeout(timer); cleanup(); document.getElementById('btnFifty').disabled = false; document.getElementById('fifty_status').innerText = '⚠ Erreur de connexion.'; };
-    socket.onclose = () => { if (done) return; clearTimeout(timer); cleanup(); if (fiftyReqId !== reqId) return; document.getElementById('btnFifty').disabled = false; document.getElementById('fifty_status').innerText = '⚠ Connexion fermée.'; };
+    socket.onerror = () => {
+        if (fiftyReqId !== reqId) return;
+        clearTimeout(timer);
+        document.getElementById('fifty_status').innerText = '⚠ Erreur de connexion.';
+        resetFiftyButton();
+    };
+    socket.onclose = () => {
+        if (fiftyReqId !== reqId) return;
+        clearTimeout(timer);
+        if (fiftyLiveOn) document.getElementById('fifty_status').innerText = '⚠ Connexion fermée.';
+        resetFiftyButton();
+    };
 }
 
-function computeFifty(prices, times, N, unit, sym) {
+function stopFiftyLive(msg) {
+    fiftyLiveOn = false;
+    fiftyReqId = 0;
+    if (fiftyWs) { try { fiftyWs.close(); } catch(e) {} fiftyWs = null; }
+    resetFiftyButton();
+    if (msg) document.getElementById('fifty_status').innerText = msg;
+}
+
+function resetFiftyButton() {
+    fiftyLiveOn = false;
+    const btn = document.getElementById('btnFifty');
+    btn.disabled = false; btn.textContent = '▶ Démarrer 50/50 Live';
+    btn.classList.remove('connected');
+    ['fifty_symbol','fifty_unit','fifty_window'].forEach(id => document.getElementById(id).disabled = false);
+}
+
+function computeFifty(prices, times, N, unit, sym, silent) {
     const L = prices.length;
-    document.getElementById('btnFifty').disabled = false;
+    if (!silent) document.getElementById('btnFifty').disabled = false;
 
     // 1) Répartition brute tick-à-tick sur tout l'échantillon
     let up=0, down=0, flat=0;
@@ -1540,7 +1591,8 @@ function computeFifty(prices, times, N, unit, sym) {
 }
 
 function renderFifty(r) {
-    document.getElementById('fifty_status').innerText = `✓ ${r.sym ? symbolLabel(r.sym) : ''} — ${r.windows} fenêtres analysées — ${new Date().toLocaleTimeString('fr',{hour12:false})}`;
+    const liveTag = fiftyLiveOn ? '🟢 LIVE — ' : '✓ ';
+    document.getElementById('fifty_status').innerText = `${liveTag}${r.sym ? symbolLabel(r.sym) : ''} — ${r.windows} fenêtres — ${r.totTicks} ticks — maj ${new Date().toLocaleTimeString('fr',{hour12:false})}`;
     document.getElementById('fifty_result').classList.add('show');
 
     const pct = (a,b) => b>0 ? (a/b*100) : 0;
