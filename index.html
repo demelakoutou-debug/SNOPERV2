@@ -141,8 +141,15 @@
         .tm-live-count { font-family: 'Share Tech Mono', monospace; font-size: 2rem; color: #e0eaf5; text-align: right; }
         .tm-live-count.tm-warn { color: var(--warn); }
         .tm-live-count.tm-bad  { color: var(--danger); }
+        .tm-updown { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+        .tm-ud-box { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; background: #060a0f; border: 1px solid var(--border); border-radius: 4px; }
+        .tm-ud-label { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+        .tm-ud-val { font-family: 'Share Tech Mono', monospace; font-size: 1.3rem; }
+        .tm-ud-up .tm-ud-val { color: var(--accent); }
+        .tm-ud-down .tm-ud-val { color: var(--danger); }
+        .tm-ud-flat .tm-ud-val { color: var(--warn); }
         .tm-hist { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
-        .tm-row { display: grid; grid-template-columns: 1fr 60px 70px; gap: 8px; align-items: center; padding: 6px 10px; font-family: 'Share Tech Mono', monospace; font-size: 11px; border-bottom: 1px solid var(--border); }
+        .tm-row { display: grid; grid-template-columns: 60px 1fr 55px; gap: 8px; align-items: center; padding: 6px 10px; font-family: 'Share Tech Mono', monospace; font-size: 10px; border-bottom: 1px solid var(--border); }
         .tm-row:last-child { border-bottom: none; }
         .tm-row .tm-min { color: var(--muted); }
         .tm-row .tm-count { text-align: right; color: #e0eaf5; }
@@ -432,7 +439,12 @@
                     <div class="tm-live-count" id="tmCurrentCount">0</div>
                 </div>
             </div>
-            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Historique par minute (attendu ≈ 60/61)</div>
+            <div class="tm-updown">
+                <div class="tm-ud-box tm-ud-up"><span class="tm-ud-label">▲ Hausse</span><span class="tm-ud-val" id="tmCurrentUp">0</span></div>
+                <div class="tm-ud-box tm-ud-down"><span class="tm-ud-label">▼ Baisse</span><span class="tm-ud-val" id="tmCurrentDown">0</span></div>
+                <div class="tm-ud-box tm-ud-flat"><span class="tm-ud-label">= Neutre</span><span class="tm-ud-val" id="tmCurrentFlat">0</span></div>
+            </div>
+            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Historique par minute (attendu ≈ 60/61 — Hausse/Baisse/Neutre)</div>
             <div class="tm-hist" id="tmHistory">
                 <div style="padding:14px;text-align:center;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:10px;">En attente de ticks...</div>
             </div>
@@ -624,7 +636,9 @@ let tickHistory   = [];
 // Compteur de ticks/minute (calibré sur l'heure serveur Deriv via tick.epoch)
 let tmCurrentMinuteKey = null;
 let tmCurrentCount     = 0;
-let tmHistoryList      = []; // { minuteKey, label, count }
+let tmCurrentUp = 0, tmCurrentDown = 0, tmCurrentFlat = 0;
+let tmLastPrice = null;
+let tmHistoryList      = []; // { minuteKey, label, count, up, down, flat }
 const TM_MAX_HIST      = 3;
 
 let isAuto        = false;
@@ -1013,9 +1027,13 @@ function isEq(id) { return document.getElementById(id)?.classList.contains('eq-o
 function resetBuffers() {
     tickHistory = []; lastTickTime = 0;
     tmCurrentMinuteKey = null; tmCurrentCount = 0; tmHistoryList = [];
+    tmCurrentUp = 0; tmCurrentDown = 0; tmCurrentFlat = 0; tmLastPrice = null;
     document.getElementById('tmCurrentMinute').innerText = '—:—:—';
     document.getElementById('tmCurrentCount').innerText = '0';
     document.getElementById('tmCurrentCount').className = 'tm-live-count';
+    document.getElementById('tmCurrentUp').innerText = '0';
+    document.getElementById('tmCurrentDown').innerText = '0';
+    document.getElementById('tmCurrentFlat').innerText = '0';
     document.getElementById('tmHistory').innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-family:\'Share Tech Mono\',monospace;font-size:10px;">En attente de ticks...</div>';
     ['lastPrice','velocity','netDir','bollinger'].forEach(id => document.getElementById(id).innerText = '—');
     ['condVel','condDir','condDist','condBoll'].forEach(id => document.getElementById(id).className = 'ind ind-off');
@@ -1053,7 +1071,7 @@ function processTick(tick) {
     if (tickHistory.length > 20) tickHistory.shift();
     document.getElementById('lastPrice').innerText = price.toFixed(1);
 
-    updateTickMinuteCounter(tick.epoch);
+    updateTickMinuteCounter(tick.epoch, price);
 
     if (tickHistory.length >= 10) {
         let dir = 0;
@@ -1370,20 +1388,30 @@ function clearTrades() {
 // tick.epoch est le timestamp Unix (secondes, UTC) fourni par le serveur Deriv
 // avec chaque tick. On regroupe donc les ticks par minute serveur (et non par
 // horloge locale du navigateur) pour vérifier objectivement le débit réel.
-function updateTickMinuteCounter(epoch) {
+function updateTickMinuteCounter(epoch, price) {
     if (!epoch) return;
     const minuteKey = Math.floor(epoch / 60);
 
     if (tmCurrentMinuteKey === null) {
         tmCurrentMinuteKey = minuteKey;
         tmCurrentCount = 0;
+        tmCurrentUp = 0; tmCurrentDown = 0; tmCurrentFlat = 0;
     } else if (minuteKey !== tmCurrentMinuteKey) {
-        // La minute serveur précédente est terminée : on l'archive.
-        finalizeTickMinute(tmCurrentMinuteKey, tmCurrentCount);
+        // La minute serveur précédente est terminée : on l'archive avec sa répartition Hausse/Baisse/Neutre.
+        finalizeTickMinute(tmCurrentMinuteKey, tmCurrentCount, tmCurrentUp, tmCurrentDown, tmCurrentFlat);
         tmCurrentMinuteKey = minuteKey;
         tmCurrentCount = 0;
+        tmCurrentUp = 0; tmCurrentDown = 0; tmCurrentFlat = 0;
     }
     tmCurrentCount++;
+
+    // Direction du tick courant par rapport au tick précédent (compteur Hausse/Baisse/Neutre en temps réel).
+    if (tmLastPrice !== null) {
+        if (price > tmLastPrice) tmCurrentUp++;
+        else if (price < tmLastPrice) tmCurrentDown++;
+        else tmCurrentFlat++;
+    }
+    tmLastPrice = price;
 
     const label = minuteLabel(minuteKey);
     const liveEl = document.getElementById('tmCurrentMinute');
@@ -1393,6 +1421,12 @@ function updateTickMinuteCounter(epoch) {
         countEl.innerText = tmCurrentCount;
         countEl.className = 'tm-live-count' + (tmCurrentCount > 61 || tmCurrentCount < 55 ? ' tm-bad' : (tmCurrentCount !== 60 && tmCurrentCount !== 61 ? ' tm-warn' : ''));
     }
+    const upEl = document.getElementById('tmCurrentUp');
+    const downEl = document.getElementById('tmCurrentDown');
+    const flatEl = document.getElementById('tmCurrentFlat');
+    if (upEl) upEl.innerText = tmCurrentUp;
+    if (downEl) downEl.innerText = tmCurrentDown;
+    if (flatEl) flatEl.innerText = tmCurrentFlat;
 }
 
 function minuteLabel(minuteKey) {
@@ -1402,8 +1436,8 @@ function minuteLabel(minuteKey) {
     return `${hh}:${mm} UTC`;
 }
 
-function finalizeTickMinute(minuteKey, count) {
-    tmHistoryList.unshift({ minuteKey, label: minuteLabel(minuteKey), count });
+function finalizeTickMinute(minuteKey, count, up, down, flat) {
+    tmHistoryList.unshift({ minuteKey, label: minuteLabel(minuteKey), count, up, down, flat });
     if (tmHistoryList.length > TM_MAX_HIST) tmHistoryList.pop();
     renderTickMinuteHistory();
 }
@@ -1422,7 +1456,7 @@ function renderTickMinuteHistory() {
             if (diff <= 2) { flagClass = 'warn'; flagTxt = m.count > 60 ? `+${m.count-60}` : `${m.count-60}`; }
             else { flagClass = 'bad'; flagTxt = m.count > 60 ? `+${m.count-60}` : `${m.count-60}`; }
         }
-        return `<div class="tm-row"><span class="tm-min">${m.label}</span><span class="tm-count">${m.count} ticks</span><span class="tm-flag ${flagClass}">${flagTxt}</span></div>`;
+        return `<div class="tm-row"><span class="tm-min">${m.label}</span><span class="tm-count">${m.count} ticks · <span style="color:var(--accent)">▲${m.up}</span> <span style="color:var(--danger)">▼${m.down}</span>${m.flat ? ` <span style="color:var(--warn)">=${m.flat}</span>` : ''}</span><span class="tm-flag ${flagClass}">${flagTxt}</span></div>`;
     }).join('');
 }
 
