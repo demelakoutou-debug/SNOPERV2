@@ -165,6 +165,19 @@
         .fifty-bar-seg { height: 100%; transition: width 0.4s; }
         .fifty-bar-val { font-family: 'Share Tech Mono', monospace; font-size: 11px; text-align: right; }
 
+        /* Ornstein-Uhlenbeck */
+        .ou-result { display: none; }
+        .ou-result.show { display: block; }
+        .ou-gauge-wrap { margin: 14px 0 16px; }
+        .ou-gauge-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+        .ou-gauge-bar-wrap { height: 10px; background: #1a2535; border-radius: 5px; overflow: hidden; margin-bottom: 6px; }
+        .ou-gauge-bar { height: 100%; border-radius: 5px; transition: width 0.4s, background 0.4s; background: var(--muted); }
+        .ou-gauge-tag { font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; text-align: center; }
+        .ou-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .ou-stat { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: #060a0f; border: 1px solid var(--border); border-radius: 4px; }
+        .ou-stat-label { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+        .ou-stat-val { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: #e0eaf5; }
+
         .eq-btn {
             width: 100%; margin-top: 8px; padding: 5px 4px;
             font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 1px;
@@ -491,6 +504,50 @@
                 <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);"><span id="f_net_down_val">Baisse —</span><span id="f_net_flat_val">Égal —</span></div>
 
                 <div id="fifty_summary" style="margin-top:14px;background:#060a0f;border:1px solid var(--border);border-radius:4px;padding:10px;font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.8;color:#7a9bb5;"></div>
+            </div>
+        </div>
+
+        <!-- RETOUR À LA MOYENNE (ORNSTEIN-UHLENBECK) -->
+        <div class="panel">
+            <div class="panel-title">Retour à la Moyenne — Ornstein-Uhlenbeck</div>
+            <div class="row">
+                <div style="flex:1">
+                    <label>Symbole</label>
+                    <select id="ou_symbol">
+                        <option value="stpRNG">Step Index 100</option>
+                        <option value="stpRNG2">Step Index 200</option>
+                        <option value="stpRNG3">Step Index 300</option>
+                        <option value="stpRNG4">Step Index 400</option>
+                        <option value="stpRNG5">Step Index 500</option>
+                    </select>
+                </div>
+                <div style="flex:1">
+                    <label>Fenêtre d'analyse (ticks)</label>
+                    <input type="number" id="ou_window" value="500" min="20">
+                </div>
+            </div>
+            <button class="btn btn-connect" id="btnOU" onclick="toggleOULive()">▶ Démarrer Analyse OU Live</button>
+            <div id="ou_status" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-top:8px;"></div>
+
+            <div class="ou-result" id="ou_result">
+                <div class="ou-gauge-wrap">
+                    <div class="ou-gauge-label">Force du rappel</div>
+                    <div class="ou-gauge-bar-wrap"><div class="ou-gauge-bar" id="ou_force_bar" style="width:0%"></div></div>
+                    <div class="ou-gauge-tag" id="ou_force_tag">—</div>
+                </div>
+
+                <div class="ou-stats-grid">
+                    <div class="ou-stat"><span class="ou-stat-label">Moyenne d'attraction (μ)</span><span class="ou-stat-val" id="ou_mu">—</span></div>
+                    <div class="ou-stat"><span class="ou-stat-label">Prix actuel</span><span class="ou-stat-val" id="ou_price">—</span></div>
+                    <div class="ou-stat"><span class="ou-stat-label">Écart actuel</span><span class="ou-stat-val" id="ou_dist">—</span></div>
+                    <div class="ou-stat"><span class="ou-stat-label">Écart-type (z-score)</span><span class="ou-stat-val" id="ou_z">—</span></div>
+                    <div class="ou-stat"><span class="ou-stat-label">Vitesse de rappel θ</span><span class="ou-stat-val" id="ou_theta">—</span></div>
+                    <div class="ou-stat"><span class="ou-stat-label">Demi-vie du retour</span><span class="ou-stat-val" id="ou_halflife">—</span></div>
+                    <div class="ou-stat"><span class="ou-stat-label">Coefficient φ</span><span class="ou-stat-val" id="ou_phi">—</span></div>
+                    <div class="ou-stat"><span class="ou-stat-label">Qualité du fit (R²)</span><span class="ou-stat-val" id="ou_r2">—</span></div>
+                </div>
+
+                <div id="ou_summary" style="margin-top:14px;background:#060a0f;border:1px solid var(--border);border-radius:4px;padding:10px;font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.8;color:#7a9bb5;white-space:pre-line;"></div>
             </div>
         </div>
 
@@ -1673,6 +1730,231 @@ function renderFifty(r) {
         `◆ 2e bloc : Continuation ${contP.toFixed(1)}% | Renversement ${revP.toFixed(1)}% | Neutre ${neuP.toFixed(1)}%`,
         `◆ Fenêtre complète (2N) : Hausse ${netUpP.toFixed(1)}% | Baisse ${netDownP.toFixed(1)}% | Égal ${netFlatP.toFixed(1)}%`,
         `◆ Écart au 50/50 (continuation vs renversement) : ${Math.abs(contP-revP).toFixed(1)} pts`
+    ].join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RETOUR À LA MOYENNE — ORNSTEIN-UHLENBECK (dX = θ(μ - X)dt + σdW)
+// ═══════════════════════════════════════════════════════════════════════════════
+// On estime les paramètres du processus par régression AR(1) sur les ticks :
+//   x_{i+1} = φ·x_i + c + ε_i     (régression des moindres carrés ordinaires)
+// D'où :
+//   μ (moyenne d'attraction) = c / (1 - φ)
+//   θ (vitesse de rappel, par tick) = -ln(φ)     [valide seulement si 0 < φ < 1]
+//   Demi-vie du retour = ln(2) / θ                (en ticks, convertie en secondes
+//                                                   via l'intervalle moyen entre ticks)
+//   σ (volatilité résiduelle) = écart-type des résidus ε_i
+//   R² = qualité du modèle (à quel point le retour à la moyenne explique le mouvement)
+//   z-score actuel = (prix actuel - μ) / écart-type stationnaire du processus
+// Si φ ≥ 1 (ou ≤ 0), il n'y a pas de retour à la moyenne détectable : le processus
+// se comporte comme une marche aléatoire pure (pas de "force de rappel").
+let ouWs = null, ouSessionId = 0, ouLiveOn = false, ouPollTimer = null, ouExpectedReqId = null;
+const OU_POLL_MS = 3000;
+
+function toggleOULive() {
+    if (ouLiveOn) { stopOULive('⏹ Live arrêté.'); return; }
+    startOULive();
+}
+
+function startOULive() {
+    const sym = document.getElementById('ou_symbol').value;
+    const win = parseInt(document.getElementById('ou_window').value) || 500;
+    if (win < 20) { document.getElementById('ou_status').innerText = '⚠ Fenêtre trop petite (min 20).'; return; }
+
+    ouSessionId++;
+    const sessionId = ouSessionId;
+
+    const btn = document.getElementById('btnOU');
+    btn.disabled = true; btn.textContent = '⏳ Connexion...';
+    ['ou_symbol','ou_window'].forEach(id => document.getElementById(id).disabled = true);
+    document.getElementById('ou_status').innerText = `Récupération de l'historique ${symbolLabel(sym)}...`;
+    document.getElementById('ou_result').classList.remove('show');
+
+    if (ouWs) { try { ouWs.close(); } catch(e) {} ouWs = null; }
+    if (ouPollTimer) { clearInterval(ouPollTimer); ouPollTimer = null; }
+    const socket = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+    ouWs = socket;
+
+    const timer = setTimeout(() => {
+        if (sessionId !== ouSessionId || ouLiveOn) return;
+        try { socket.close(); } catch(e) {}
+        document.getElementById('ou_status').innerText = '⏱ Timeout.';
+        resetOUButton();
+    }, 20000);
+
+    const sendHistoryRequest = () => {
+        if (sessionId !== ouSessionId || !ouWs || ouWs.readyState !== WebSocket.OPEN) return;
+        ouExpectedReqId = Math.floor(Date.now()/1000)%100000 + Math.floor(Math.random()*1000);
+        ouWs.send(JSON.stringify({ ticks_history: sym, adjust_start_time: 1, count: 5000, end: "latest", start: 1, style: "ticks", req_id: ouExpectedReqId }));
+    };
+
+    socket.onopen = () => {
+        if (sessionId !== ouSessionId) { try { socket.close(); } catch(e) {} return; }
+        sendHistoryRequest();
+    };
+
+    socket.onmessage = (msg) => {
+        if (sessionId !== ouSessionId) return;
+        let data; try { data = JSON.parse(msg.data); } catch(e) { return; }
+        if (data.req_id !== ouExpectedReqId) return;
+        if (data.error) {
+            clearTimeout(timer);
+            document.getElementById('ou_status').innerText = '⚠ ' + data.error.message;
+            resetOUButton();
+            if (ouPollTimer) { clearInterval(ouPollTimer); ouPollTimer = null; }
+            try { socket.close(); } catch(e) {}
+            return;
+        }
+        if (data.msg_type === 'history') {
+            clearTimeout(timer);
+            const prices = data.history.prices.map(Number);
+            const times  = data.history.times.map(Number);
+            if (!ouLiveOn) {
+                ouLiveOn = true;
+                btn.disabled = false; btn.textContent = '⏹ Arrêter Live';
+                btn.classList.add('connected');
+                ouPollTimer = setInterval(sendHistoryRequest, OU_POLL_MS);
+            }
+            document.getElementById('ou_status').innerText = `🟢 LIVE — ${prices.length} ticks — maj auto toutes les ${OU_POLL_MS/1000}s`;
+            computeOU(prices, times, win, sym);
+        }
+    };
+    socket.onerror = () => {
+        if (sessionId !== ouSessionId) return;
+        clearTimeout(timer);
+        document.getElementById('ou_status').innerText = '⚠ Erreur de connexion.';
+        if (ouPollTimer) { clearInterval(ouPollTimer); ouPollTimer = null; }
+        resetOUButton();
+    };
+    socket.onclose = () => {
+        if (sessionId !== ouSessionId) return;
+        clearTimeout(timer);
+        if (ouLiveOn) document.getElementById('ou_status').innerText = '⚠ Connexion fermée.';
+        if (ouPollTimer) { clearInterval(ouPollTimer); ouPollTimer = null; }
+        resetOUButton();
+    };
+}
+
+function stopOULive(msg) {
+    ouLiveOn = false;
+    ouSessionId++;
+    if (ouPollTimer) { clearInterval(ouPollTimer); ouPollTimer = null; }
+    if (ouWs) { try { ouWs.close(); } catch(e) {} ouWs = null; }
+    resetOUButton();
+    if (msg) document.getElementById('ou_status').innerText = msg;
+}
+
+function resetOUButton() {
+    ouLiveOn = false;
+    const btn = document.getElementById('btnOU');
+    btn.disabled = false; btn.textContent = '▶ Démarrer Analyse OU Live';
+    btn.classList.remove('connected');
+    ['ou_symbol','ou_window'].forEach(id => document.getElementById(id).disabled = false);
+}
+
+function computeOU(prices, times, windowSize, sym) {
+    const L = prices.length;
+    const w = Math.min(windowSize, L - 1);
+    if (w < 20) {
+        document.getElementById('ou_status').innerText = '⚠ Pas assez de données pour cette fenêtre.';
+        return;
+    }
+    // x_i = prix au tick i, y_i = prix au tick i+1 (régression AR(1) glissante sur la fenêtre choisie)
+    const x = prices.slice(L - w - 1, L - 1);
+    const y = prices.slice(L - w, L);
+    const n = x.length;
+    const xMean = x.reduce((a,b)=>a+b,0)/n, yMean = y.reduce((a,b)=>a+b,0)/n;
+
+    let cov = 0, varX = 0;
+    for (let i=0; i<n; i++) { cov += (x[i]-xMean)*(y[i]-yMean); varX += (x[i]-xMean)**2; }
+    const phi = varX > 0 ? cov/varX : 1;
+    const c = yMean - phi*xMean;
+
+    let ssRes = 0, ssTot = 0;
+    for (let i=0; i<n; i++) { const pred = phi*x[i]+c, res = y[i]-pred; ssRes += res*res; ssTot += (y[i]-yMean)**2; }
+    const r2 = ssTot > 0 ? 1 - ssRes/ssTot : 0;
+    const sigma = Math.sqrt(ssRes/Math.max(n-2,1));
+
+    // Intervalle moyen entre ticks (secondes, heure serveur Deriv) sur la fenêtre
+    const timesWindow = times.slice(L - w - 1, L);
+    let dtSum=0, dtCount=0;
+    for (let i=1;i<timesWindow.length;i++){ const d=timesWindow[i]-timesWindow[i-1]; if(d>0){dtSum+=d;dtCount++;} }
+    const avgDt = dtCount>0 ? dtSum/dtCount : 1;
+
+    const stationary = phi > 0 && phi < 1;
+    let mu=null, theta=null, halfLifeTicks=null, halfLifeSec=null, thetaPerSec=null;
+    let currentPrice = prices[L-1], distance=null, zScore=null, stationaryStd=null;
+    if (stationary) {
+        theta = -Math.log(phi);
+        halfLifeTicks = Math.log(2)/theta;
+        halfLifeSec = halfLifeTicks*avgDt;
+        thetaPerSec = theta/avgDt;
+        mu = c/(1-phi);
+        distance = currentPrice - mu;
+        stationaryStd = Math.sqrt((sigma*sigma)/(1-phi*phi));
+        zScore = stationaryStd > 0 ? distance/stationaryStd : null;
+    }
+
+    renderOU({ sym, w, phi, r2, sigma, avgDt, stationary, theta, halfLifeTicks, halfLifeSec, thetaPerSec, mu, currentPrice, distance, zScore, stationaryStd });
+}
+
+function renderOU(r) {
+    document.getElementById('ou_result').classList.add('show');
+    const liveTag = ouLiveOn ? '🟢 LIVE — ' : '✓ ';
+    document.getElementById('ou_status').innerText = `${liveTag}${symbolLabel(r.sym)} — fenêtre ${r.w} ticks — maj ${new Date().toLocaleTimeString('fr',{hour12:false})}`;
+
+    document.getElementById('ou_price').textContent = r.currentPrice.toFixed(2);
+    document.getElementById('ou_phi').textContent = r.phi.toFixed(4);
+    document.getElementById('ou_r2').textContent = (r.r2*100).toFixed(2) + '%';
+
+    const forceBar = document.getElementById('ou_force_bar');
+    const forceTag = document.getElementById('ou_force_tag');
+
+    if (!r.stationary) {
+        document.getElementById('ou_mu').textContent = '—';
+        document.getElementById('ou_dist').textContent = '—';
+        document.getElementById('ou_z').textContent = '—';
+        document.getElementById('ou_theta').textContent = '—';
+        document.getElementById('ou_halflife').textContent = '—';
+        forceBar.style.width = '0%'; forceBar.style.background = 'var(--muted)';
+        forceTag.textContent = 'AUCUN RAPPEL DÉTECTÉ (φ ≥ 1 — comportement de marche aléatoire pure)';
+        forceTag.style.color = 'var(--muted)';
+        document.getElementById('ou_summary').innerText = [
+            `◆ φ = ${r.phi.toFixed(4)} ≥ 1 : le modèle ne détecte aucune force de rappel sur cette fenêtre.`,
+            `◆ Le prix se comporte, sur cet échantillon, comme une marche aléatoire sans ancrage à une moyenne.`,
+            `◆ Essaie une fenêtre différente (plus grande ou plus petite) — le résultat peut varier selon la période observée.`
+        ].join('\n');
+        return;
+    }
+
+    document.getElementById('ou_mu').textContent = r.mu.toFixed(2);
+    document.getElementById('ou_dist').textContent = (r.distance>=0?'+':'') + r.distance.toFixed(2);
+    document.getElementById('ou_z').textContent = r.zScore!==null ? (r.zScore>=0?'+':'') + r.zScore.toFixed(2) + ' σ' : '—';
+    document.getElementById('ou_theta').textContent = r.theta.toFixed(4) + '/tick (' + r.thetaPerSec.toFixed(5) + '/s)';
+    document.getElementById('ou_halflife').textContent = r.halfLifeTicks.toFixed(1) + ' ticks (~' + r.halfLifeSec.toFixed(1) + 's)';
+
+    // Jauge de force : basée sur la demi-vie (plus elle est courte, plus le rappel est fort/rapide)
+    // et sur R² (plus il est élevé, plus le modèle explique bien le mouvement).
+    const speedScore = Math.max(0, Math.min(100, 100 * (1 - Math.min(r.halfLifeTicks, 200)/200))); // demi-vie courte = score élevé
+    const fitScore = Math.max(0, Math.min(100, r.r2*100*3)); // R² typiquement faible sur du bruit financier, on amplifie x3 pour lisibilité
+    const forceScore = Math.round((speedScore*0.6 + fitScore*0.4));
+    forceBar.style.width = forceScore + '%';
+    let forceColor, forceLabel;
+    if (forceScore < 25)      { forceColor = 'var(--muted)';  forceLabel = 'FAIBLE — proche d\'une marche aléatoire'; }
+    else if (forceScore < 55) { forceColor = 'var(--warn)';   forceLabel = 'MODÉRÉ — léger rappel détectable'; }
+    else if (forceScore < 75) { forceColor = '#ff8040';       forceLabel = 'MARQUÉ — rappel assez rapide'; }
+    else                       { forceColor = 'var(--accent2)'; forceLabel = 'FORT — rappel rapide et net'; }
+    forceBar.style.background = forceColor;
+    forceTag.textContent = forceLabel;
+    forceTag.style.color = forceColor;
+
+    document.getElementById('ou_summary').innerText = [
+        `◆ Modèle : x(i+1) = ${r.phi.toFixed(4)}·x(i) + c   (R² = ${(r.r2*100).toFixed(2)}%)`,
+        `◆ Moyenne d'attraction μ = ${r.mu.toFixed(2)} | Prix actuel = ${r.currentPrice.toFixed(2)} | Écart = ${(r.distance>=0?'+':'')+r.distance.toFixed(2)} (${r.zScore!==null?(r.zScore>=0?'+':'')+r.zScore.toFixed(2)+'σ':'—'})`,
+        `◆ Vitesse de rappel θ = ${r.theta.toFixed(4)}/tick — demi-vie ≈ ${r.halfLifeTicks.toFixed(1)} ticks (~${r.halfLifeSec.toFixed(1)}s à ${r.avgDt.toFixed(2)}s/tick)`,
+        `◆ σ résiduel = ${r.sigma.toFixed(4)} | Écart-type stationnaire théorique = ${r.stationaryStd.toFixed(2)}`,
+        `◆ Rappel : ${forceLabel}`,
+        `◆ Rappel : R² faible (courant sur données financières bruitées) ne veut pas dire "pas de rappel" — regarde surtout θ et la demi-vie. Ce résultat décrit l'historique observé, pas une garantie sur la suite.`
     ].join('\n');
 }
 
