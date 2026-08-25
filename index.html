@@ -173,6 +173,7 @@
         .ou-gauge-bar-wrap { height: 10px; background: #1a2535; border-radius: 5px; overflow: hidden; margin-bottom: 6px; }
         .ou-gauge-bar { height: 100%; border-radius: 5px; transition: width 0.4s, background 0.4s; background: var(--muted); }
         .ou-gauge-tag { font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; text-align: center; }
+        .ou-gauge-dir { font-family: 'Share Tech Mono', monospace; font-size: 13px; font-weight: bold; text-align: center; margin-top: 6px; padding: 6px; border-radius: 4px; background: #060a0f; border: 1px solid var(--border); }
         .ou-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .ou-stat { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: #060a0f; border: 1px solid var(--border); border-radius: 4px; }
         .ou-stat-label { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
@@ -534,6 +535,7 @@
                     <div class="ou-gauge-label">Force du rappel</div>
                     <div class="ou-gauge-bar-wrap"><div class="ou-gauge-bar" id="ou_force_bar" style="width:0%"></div></div>
                     <div class="ou-gauge-tag" id="ou_force_tag">—</div>
+                    <div class="ou-gauge-dir" id="ou_direction">—</div>
                 </div>
 
                 <div class="ou-stats-grid">
@@ -1919,6 +1921,9 @@ function renderOU(r) {
         forceBar.style.width = '0%'; forceBar.style.background = 'var(--muted)';
         forceTag.textContent = 'AUCUN RAPPEL DÉTECTÉ (φ ≥ 1 — comportement de marche aléatoire pure)';
         forceTag.style.color = 'var(--muted)';
+        const dirEl0 = document.getElementById('ou_direction');
+        dirEl0.textContent = '— Pas de direction (aucun rappel détecté)';
+        dirEl0.style.color = 'var(--muted)'; dirEl0.style.borderColor = 'var(--border)';
         document.getElementById('ou_summary').innerText = [
             `◆ φ = ${r.phi.toFixed(4)} ≥ 1 : le modèle ne détecte aucune force de rappel sur cette fenêtre.`,
             `◆ Le prix se comporte, sur cet échantillon, comme une marche aléatoire sans ancrage à une moyenne.`,
@@ -1948,12 +1953,27 @@ function renderOU(r) {
     forceTag.textContent = forceLabel;
     forceTag.style.color = forceColor;
 
+    // Direction du rappel attendu : basée sur le signe de l'écart actuel par rapport à μ.
+    const dirEl = document.getElementById('ou_direction');
+    const zAbs = r.zScore !== null ? Math.abs(r.zScore) : 0;
+    if (zAbs < 0.2) {
+        dirEl.textContent = '≈ PRIX PROCHE DE μ — pas de direction claire';
+        dirEl.style.color = 'var(--muted)'; dirEl.style.borderColor = 'var(--border)';
+    } else if (r.distance > 0) {
+        dirEl.textContent = '▼ RAPPEL ATTENDU VERS LE BAS (prix au-dessus de μ)';
+        dirEl.style.color = 'var(--danger)'; dirEl.style.borderColor = 'var(--danger)';
+    } else {
+        dirEl.textContent = '▲ RAPPEL ATTENDU VERS LE HAUT (prix en-dessous de μ)';
+        dirEl.style.color = 'var(--accent)'; dirEl.style.borderColor = 'var(--accent)';
+    }
+
     document.getElementById('ou_summary').innerText = [
         `◆ Modèle : x(i+1) = ${r.phi.toFixed(4)}·x(i) + c   (R² = ${(r.r2*100).toFixed(2)}%)`,
         `◆ Moyenne d'attraction μ = ${r.mu.toFixed(2)} | Prix actuel = ${r.currentPrice.toFixed(2)} | Écart = ${(r.distance>=0?'+':'')+r.distance.toFixed(2)} (${r.zScore!==null?(r.zScore>=0?'+':'')+r.zScore.toFixed(2)+'σ':'—'})`,
         `◆ Vitesse de rappel θ = ${r.theta.toFixed(4)}/tick — demi-vie ≈ ${r.halfLifeTicks.toFixed(1)} ticks (~${r.halfLifeSec.toFixed(1)}s à ${r.avgDt.toFixed(2)}s/tick)`,
         `◆ σ résiduel = ${r.sigma.toFixed(4)} | Écart-type stationnaire théorique = ${r.stationaryStd.toFixed(2)}`,
         `◆ Rappel : ${forceLabel}`,
+        `◆ Direction attendue : ${zAbs < 0.2 ? 'aucune (prix proche de μ)' : (r.distance > 0 ? 'BAISSE (prix au-dessus de μ, tiré vers le bas)' : 'HAUSSE (prix en-dessous de μ, tiré vers le haut)')}`,
         `◆ Rappel : R² faible (courant sur données financières bruitées) ne veut pas dire "pas de rappel" — regarde surtout θ et la demi-vie. Ce résultat décrit l'historique observé, pas une garantie sur la suite.`
     ].join('\n');
 }
