@@ -178,6 +178,12 @@
         .ou-stat { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: #060a0f; border: 1px solid var(--border); border-radius: 4px; }
         .ou-stat-label { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
         .ou-stat-val { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: #e0eaf5; }
+        .ou-multiscale { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+        .ou-ms-box { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; background: #060a0f; border: 1px solid var(--border); border-radius: 4px; }
+        .ou-ms-box.ou-ms-main { border-color: var(--accent2); }
+        .ou-ms-label { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+        .ou-ms-force { font-family: 'Share Tech Mono', monospace; font-size: 10px; font-weight: bold; letter-spacing: 0.5px; }
+        .ou-ms-dir { font-family: 'Share Tech Mono', monospace; font-size: 14px; }
 
         .eq-btn {
             width: 100%; margin-top: 8px; padding: 5px 4px;
@@ -531,6 +537,11 @@
             <div id="ou_status" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-top:8px;"></div>
 
             <div class="ou-result" id="ou_result">
+                <div class="ou-multiscale" id="ou_multiscale">
+                    <div class="ou-ms-box" id="ou_ms_short"><div class="ou-ms-label">Court</div><div class="ou-ms-force">—</div><div class="ou-ms-dir">—</div></div>
+                    <div class="ou-ms-box ou-ms-main" id="ou_ms_main"><div class="ou-ms-label">Actuel</div><div class="ou-ms-force">—</div><div class="ou-ms-dir">—</div></div>
+                    <div class="ou-ms-box" id="ou_ms_long"><div class="ou-ms-label">Long</div><div class="ou-ms-force">—</div><div class="ou-ms-dir">—</div></div>
+                </div>
                 <div class="ou-gauge-wrap">
                     <div class="ou-gauge-label">Force du rappel</div>
                     <div class="ou-gauge-bar-wrap"><div class="ou-gauge-bar" id="ou_force_bar" style="width:0%"></div></div>
@@ -1854,13 +1865,10 @@ function resetOUButton() {
     ['ou_symbol','ou_window'].forEach(id => document.getElementById(id).disabled = false);
 }
 
-function computeOU(prices, times, windowSize, sym) {
+function calcOUStats(prices, times, windowSize) {
     const L = prices.length;
     const w = Math.min(windowSize, L - 1);
-    if (w < 20) {
-        document.getElementById('ou_status').innerText = '⚠ Pas assez de données pour cette fenêtre.';
-        return;
-    }
+    if (w < 20) return null;
     // x_i = prix au tick i, y_i = prix au tick i+1 (régression AR(1) glissante sur la fenêtre choisie)
     const x = prices.slice(L - w - 1, L - 1);
     const y = prices.slice(L - w, L);
@@ -1897,7 +1905,63 @@ function computeOU(prices, times, windowSize, sym) {
         zScore = stationaryStd > 0 ? distance/stationaryStd : null;
     }
 
-    renderOU({ sym, w, phi, r2, sigma, avgDt, stationary, theta, halfLifeTicks, halfLifeSec, thetaPerSec, mu, currentPrice, distance, zScore, stationaryStd });
+    return { w, phi, r2, sigma, avgDt, stationary, theta, halfLifeTicks, halfLifeSec, thetaPerSec, mu, currentPrice, distance, zScore, stationaryStd };
+}
+
+// Score de force (0-100) utilisé à la fois par la jauge principale et par le comparatif multi-échelle.
+function ouForceScore(r) {
+    if (!r.stationary) return 0;
+    const speedScore = Math.max(0, Math.min(100, 100 * (1 - Math.min(r.halfLifeTicks, 200)/200)));
+    const fitScore = Math.max(0, Math.min(100, r.r2*100*3));
+    return Math.round(speedScore*0.6 + fitScore*0.4);
+}
+function ouForceLabel(score) {
+    if (score < 25) return ['FAIBLE', 'var(--muted)'];
+    if (score < 55) return ['MODÉRÉ', 'var(--warn)'];
+    if (score < 75) return ['MARQUÉ', '#ff8040'];
+    return ['FORT', 'var(--accent2)'];
+}
+
+function computeOU(prices, times, windowSize, sym) {
+    const r = calcOUStats(prices, times, windowSize);
+    if (!r) {
+        document.getElementById('ou_status').innerText = '⚠ Pas assez de données pour cette fenêtre.';
+        return;
+    }
+    renderOU({ sym, ...r });
+    renderOUMultiScale(prices, times, windowSize);
+}
+
+// Comparatif simultané Court / Actuel / Long — mêmes données déjà téléchargées, aucun appel réseau
+// supplémentaire. Court = fenêtre / 3, Long = fenêtre × 2 (bornées à 20 min et taille du buffer).
+function renderOUMultiScale(prices, times, N) {
+    const L = prices.length;
+    const sizes = {
+        ou_ms_short: Math.max(20, Math.round(N/3)),
+        ou_ms_main:  N,
+        ou_ms_long:  Math.min(L - 1, N*2)
+    };
+    Object.entries(sizes).forEach(([boxId, size]) => {
+        const box = document.getElementById(boxId);
+        if (!box) return;
+        const forceEl = box.querySelector('.ou-ms-force');
+        const dirEl = box.querySelector('.ou-ms-dir');
+        const label = box.querySelector('.ou-ms-label');
+        label.textContent = (boxId==='ou_ms_short'?'Court':boxId==='ou_ms_long'?'Long':'Actuel') + ` (${size})`;
+        const r = calcOUStats(prices, times, size);
+        if (!r || !r.stationary) {
+            forceEl.textContent = r ? 'FAIBLE' : '—'; forceEl.style.color = 'var(--muted)';
+            dirEl.textContent = '—'; dirEl.style.color = 'var(--muted)';
+            return;
+        }
+        const score = ouForceScore(r);
+        const [lbl, col] = ouForceLabel(score);
+        forceEl.textContent = lbl; forceEl.style.color = col;
+        const zAbs = r.zScore !== null ? Math.abs(r.zScore) : 0;
+        if (zAbs < 0.2) { dirEl.textContent = '≈'; dirEl.style.color = 'var(--muted)'; }
+        else if (r.distance > 0) { dirEl.textContent = '▼'; dirEl.style.color = 'var(--danger)'; }
+        else { dirEl.textContent = '▲'; dirEl.style.color = 'var(--accent)'; }
+    });
 }
 
 function renderOU(r) {
