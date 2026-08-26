@@ -1956,7 +1956,8 @@ function renderOUMultiScale(prices, times, N) {
         }
         const score = ouForceScore(r);
         const [lbl, col] = ouForceLabel(score);
-        forceEl.textContent = lbl; forceEl.style.color = col;
+        const unreliableMs = r.halfLifeTicks > r.w;
+        forceEl.textContent = lbl + (unreliableMs ? ' ⚠' : ''); forceEl.style.color = unreliableMs ? 'var(--warn)' : col;
         const zAbs = r.zScore !== null ? Math.abs(r.zScore) : 0;
         if (zAbs < 0.2) { dirEl.textContent = '≈'; dirEl.style.color = 'var(--muted)'; }
         else if (r.distance > 0) { dirEl.textContent = '▼'; dirEl.style.color = 'var(--danger)'; }
@@ -2000,7 +2001,10 @@ function renderOU(r) {
     document.getElementById('ou_dist').textContent = (r.distance>=0?'+':'') + r.distance.toFixed(2);
     document.getElementById('ou_z').textContent = r.zScore!==null ? (r.zScore>=0?'+':'') + r.zScore.toFixed(2) + ' σ' : '—';
     document.getElementById('ou_theta').textContent = r.theta.toFixed(4) + '/tick (' + r.thetaPerSec.toFixed(5) + '/s)';
-    document.getElementById('ou_halflife').textContent = r.halfLifeTicks.toFixed(1) + ' ticks (~' + r.halfLifeSec.toFixed(1) + 's)';
+    const halfLifeEl = document.getElementById('ou_halflife');
+    const unreliable = r.halfLifeTicks > r.w; // demi-vie extrapolée au-delà de ce que la fenêtre peut réellement soutenir
+    halfLifeEl.textContent = r.halfLifeTicks.toFixed(1) + ' ticks (~' + r.halfLifeSec.toFixed(1) + 's)' + (unreliable ? ' ⚠' : '');
+    halfLifeEl.style.color = unreliable ? 'var(--warn)' : '#e0eaf5';
 
     // Jauge de force : basée sur la demi-vie (plus elle est courte, plus le rappel est fort/rapide)
     // et sur R² (plus il est élevé, plus le modèle explique bien le mouvement).
@@ -2038,7 +2042,8 @@ function renderOU(r) {
         `◆ σ résiduel = ${r.sigma.toFixed(4)} | Écart-type stationnaire théorique = ${r.stationaryStd.toFixed(2)}`,
         `◆ Rappel : ${forceLabel}`,
         `◆ Direction attendue : ${zAbs < 0.2 ? 'aucune (prix proche de μ)' : (r.distance > 0 ? 'BAISSE (prix au-dessus de μ, tiré vers le bas)' : 'HAUSSE (prix en-dessous de μ, tiré vers le haut)')}`,
-        `◆ Rappel : R² faible (courant sur données financières bruitées) ne veut pas dire "pas de rappel" — regarde surtout θ et la demi-vie. Ce résultat décrit l'historique observé, pas une garantie sur la suite.`
+        `◆ Rappel : R² faible (courant sur données financières bruitées) ne veut pas dire "pas de rappel" — regarde surtout θ et la demi-vie. Ce résultat décrit l'historique observé, pas une garantie sur la suite.`,
+        ...(unreliable ? [`⚠ ATTENTION : demi-vie (${r.halfLifeTicks.toFixed(0)}) > taille de fenêtre (${r.w}) — estimation peu fiable, la fenêtre est trop courte pour ce niveau de rappel. Augmente la taille de fenêtre pour une estimation plus solide.`] : [])
     ].join('\n');
 }
 
